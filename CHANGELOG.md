@@ -17,6 +17,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Renamed the userscript from `untitled.user.js` to `ncm-playlist-sort-and-move.user.js`.
 - Updated userscript metadata with project homepage, support, update, and download links.
 
+## [0.5.0] - 2026-08-30
+
+### Changed
+
+- Modularized the userscript source into `src/` while preserving existing behavior.
+- Added a build and verification workflow with esbuild.
+- Added a GitHub Actions workflow to build and commit the generated userscript.
+- Renamed the displayed userscript name to `网易云音乐歌单排序`.
+
 ## [0.4.0] - 2026-08-30
 
 ### Added

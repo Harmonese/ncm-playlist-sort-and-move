@@ -59,6 +59,29 @@
 - 优化页面注入方式，减少轮询。
 - 准备 Greasy Fork 或 GitHub Releases 发布流程。
 
+## 本地开发
+
+源码位于 `src/` 目录，最终可安装的用户脚本由源码构建生成。
+
+```bash
+npm install
+npm run verify
+```
+
+`npm run verify` 会构建 `ncm-playlist-sort-and-move.user.js`，并检查生成文件的 JavaScript 语法。
+
+推送涉及源码或构建配置的提交到 `main` 后，GitHub Actions 也会自动执行同样的构建和检查，并在构建产物有变化时将更新后的用户脚本提交回仓库。配合 Greasy Fork Webhook，可以实现后续版本的自动同步。
+
+主要目录职责如下：
+
+- `src/main.js`：脚本入口和页面按钮注入。
+- `src/ui/`：菜单、输入框和确认弹窗。
+- `src/operations/`：排序、移动、删除等完整操作流程。
+- `src/ncm/`：网易云接口、请求和 weapi 加密。
+- `src/data/`：歌曲和歌单数据整理。
+- `src/sort/`：标题和发行日期排序规则。
+- `src/utils/`：通用工具函数。
+
 ## 更新日志
 
 详细更新记录见 [CHANGELOG.md](CHANGELOG.md)。
