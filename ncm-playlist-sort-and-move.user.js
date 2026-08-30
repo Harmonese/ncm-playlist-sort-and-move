@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.2
+// @version      0.5.3
 // @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -244,6 +244,16 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (/\p{Script=Greek}/u.test(character)) return "greek";
     if (/\p{Script=Arabic}/u.test(character)) return "arabic";
     return "other";
+  }
+  function detectTitleCategoryIds(items = []) {
+    const detected = /* @__PURE__ */ new Set();
+    for (const item of items) {
+      for (const character of Array.from(item.title || "")) {
+        detected.add(classifyCharacter(character));
+      }
+    }
+    if (!detected.size) detected.add("other");
+    return TITLE_CATEGORIES.filter((category) => detected.has(category.id)).map((category) => category.id);
   }
   function compareUnicodeCharacters(a, b) {
     return (a.codePointAt(0) || 0) - (b.codePointAt(0) || 0);
@@ -698,6 +708,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       line-height: 1.55 !important;
     }
 
+    .ncm-sort-detected {
+      display: inline-block;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin-top: 10px !important;
+      padding: 5px 9px;
+      border: 1px solid #d7e8e5;
+      border-radius: 6px;
+      background: #f1f8f7;
+      color: #286b64 !important;
+      font-size: 12px !important;
+      line-height: 1.45 !important;
+    }
+
     .ncm-sort-warning {
       margin-top: 8px !important;
       color: #bd4848 !important;
@@ -800,48 +824,14 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   `);
   }
 
-  // src/operations/sort-by-title.js
-  async function sortByTitle(pid, sortConfig) {
-    showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-    const { playlist, items } = await getAllSongs(pid);
-    showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-    const ordered = items.slice().sort(createTitleComparator(sortConfig)).map((x) => x.id);
-    showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
-    const res = await updatePlaylistOrder(pid, ordered);
-    if (res && res.code === 200) {
-      Swal.fire({
-        icon: "success",
-        title: "\u6392\u5E8F\u5B8C\u6210",
-        text: `${playlist.name}
-\u5171 ${ordered.length} \u9996
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
-        customClass: swalClasses
-      });
-    } else {
-      Swal.fire({
-        icon: "error",
-        title: "\u6392\u5E8F\u5931\u8D25",
-        text: JSON.stringify(res),
-        customClass: swalClasses
-      });
-    }
-  }
-
-  // src/sort/date.js
-  function cmpByDate(descending) {
-    return (a, b) => {
-      const timeA = a.publishTime || 0;
-      const timeB = b.publishTime || 0;
-      if (timeA !== timeB) {
-        return descending ? timeB - timeA : timeA - timeB;
-      }
-      return cmpByTitle(a, b);
-    };
-  }
-
   // src/ui/dialogs.js
-  function createTitleCategoryList() {
-    return TITLE_CATEGORIES.map((category, index) => `
+  function getVisibleTitleCategories(categoryIds) {
+    const requestedIds = Array.isArray(categoryIds) ? new Set(categoryIds) : new Set(TITLE_CATEGORIES.map((category) => category.id));
+    const categories = TITLE_CATEGORIES.filter((category) => requestedIds.has(category.id));
+    return categories.length ? categories : [TITLE_CATEGORIES.find((category) => category.id === "other")];
+  }
+  function createTitleCategoryList(categories) {
+    return categories.map((category, index) => `
     <li class="ncm-sort-priority-item" data-category="${category.id}">
       <span class="ncm-sort-priority-name">
         <span class="ncm-sort-priority-index">${index + 1}</span>
@@ -874,7 +864,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     fieldset.disabled = disabled;
     fieldset.classList.toggle("is-disabled", disabled);
   }
-  function showTitleSortDialog() {
+  function showTitleSortDialog(categoryIds) {
+    const categories = getVisibleTitleCategories(categoryIds);
+    const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
       title: "\u6309\u6807\u9898\u6392\u5E8F",
       html: `
@@ -882,6 +874,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         <div class="ncm-sort-intro">
           <p>\u9009\u62E9\u6807\u9898\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
           <p class="ncm-sort-help">\u5173\u95ED\u76F4\u63A5\u6BD4\u8F83\u65F6\uFF0C\u811A\u672C\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
+          <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
         </div>
 
         <label class="ncm-sort-switch-row">
@@ -895,9 +888,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>\u5B57\u7B26\u7C7B\u522B\u4F18\u5148\u7EA7</legend>
-          <p class="ncm-sort-help">\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
+          <p class="ncm-sort-help">\u4EC5\u663E\u793A\u5F53\u524D\u6B4C\u5355\u51FA\u73B0\u7684\u7C7B\u522B\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\uFF0C\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
           <ol class="ncm-sort-priority-list">
-            ${createTitleCategoryList()}
+            ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
             <span class="ncm-sort-label">\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\uFF1A</span>
@@ -1083,6 +1076,49 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     });
   }
 
+  // src/operations/sort-by-title.js
+  async function sortByTitle(pid) {
+    showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2\u5E76\u8BC6\u522B\u6587\u5B57\u4F53\u7CFB...");
+    const { playlist, items } = await getAllSongs(pid);
+    const categoryIds = detectTitleCategoryIds(items);
+    const settings = await showTitleSortDialog(categoryIds);
+    if (!settings.isConfirmed) return;
+    if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) return;
+    showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
+    const ordered = items.slice().sort(createTitleComparator(settings.value)).map((x) => x.id);
+    showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+    const res = await updatePlaylistOrder(pid, ordered);
+    if (res && res.code === 200) {
+      Swal.fire({
+        icon: "success",
+        title: "\u6392\u5E8F\u5B8C\u6210",
+        text: `${playlist.name}
+\u5171 ${ordered.length} \u9996
+\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        customClass: swalClasses
+      });
+    } else {
+      Swal.fire({
+        icon: "error",
+        title: "\u6392\u5E8F\u5931\u8D25",
+        text: JSON.stringify(res),
+        customClass: swalClasses
+      });
+    }
+  }
+
+  // src/sort/date.js
+  function cmpByDate(descending) {
+    return (a, b) => {
+      const timeA = a.publishTime || 0;
+      const timeB = b.publishTime || 0;
+      if (timeA !== timeB) {
+        return descending ? timeB - timeA : timeA - timeB;
+      }
+      return cmpByTitle(a, b);
+    };
+  }
+
   // src/operations/sort-by-date.js
   async function sortByPublishDate(pid) {
     const result = await showDateSortDialog(pid, performDateSort);
@@ -1264,11 +1300,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         document.getElementById("sort-by-title").addEventListener("click", async () => {
           Swal.close();
           try {
-            const settings = await showTitleSortDialog();
-            if (!settings.isConfirmed) return;
-            if (confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) {
-              await sortByTitle(pid, settings.value);
-            }
+            await sortByTitle(pid);
           } catch (e) {
             console.error(e);
             Swal.fire({

@@ -5,8 +5,19 @@ import {
   TITLE_CHINESE_SORTS
 } from '../sort/title.js';
 
-function createTitleCategoryList() {
-  return TITLE_CATEGORIES.map((category, index) => `
+function getVisibleTitleCategories(categoryIds) {
+  const requestedIds = Array.isArray(categoryIds)
+    ? new Set(categoryIds)
+    : new Set(TITLE_CATEGORIES.map(category => category.id));
+  const categories = TITLE_CATEGORIES.filter(category => requestedIds.has(category.id));
+
+  return categories.length
+    ? categories
+    : [TITLE_CATEGORIES.find(category => category.id === 'other')];
+}
+
+function createTitleCategoryList(categories) {
+  return categories.map((category, index) => `
     <li class="ncm-sort-priority-item" data-category="${category.id}">
       <span class="ncm-sort-priority-name">
         <span class="ncm-sort-priority-index">${index + 1}</span>
@@ -44,7 +55,10 @@ function setPriorityDisabled(disabled) {
   fieldset.classList.toggle('is-disabled', disabled);
 }
 
-export function showTitleSortDialog() {
+export function showTitleSortDialog(categoryIds) {
+  const categories = getVisibleTitleCategories(categoryIds);
+  const categoryNames = categories.map(category => category.label).join('、');
+
   return Swal.fire({
     title: '按标题排序',
     html: `
@@ -52,6 +66,7 @@ export function showTitleSortDialog() {
         <div class="ncm-sort-intro">
           <p>选择标题的比较方式：</p>
           <p class="ncm-sort-help">关闭直接比较时，脚本会从左到右逐个字符比较。</p>
+          <p class="ncm-sort-detected">当前歌单：${categories.length} 类（${categoryNames}）</p>
         </div>
 
         <label class="ncm-sort-switch-row">
@@ -65,9 +80,9 @@ export function showTitleSortDialog() {
 
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>字符类别优先级</legend>
-          <p class="ncm-sort-help">越靠上优先级越高。每个标题位置都会使用同一套顺序。</p>
+          <p class="ncm-sort-help">仅显示当前歌单出现的类别。越靠上优先级越高，每个标题位置都会使用同一套顺序。</p>
           <ol class="ncm-sort-priority-list">
-            ${createTitleCategoryList()}
+            ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
             <span class="ncm-sort-label">汉字排序方式：</span>

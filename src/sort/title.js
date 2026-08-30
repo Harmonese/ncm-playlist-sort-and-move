@@ -98,6 +98,22 @@ function classifyCharacter(character) {
   return 'other';
 }
 
+export function detectTitleCategoryIds(items = []) {
+  const detected = new Set();
+
+  for (const item of items) {
+    for (const character of Array.from(item.title || '')) {
+      detected.add(classifyCharacter(character));
+    }
+  }
+
+  if (!detected.size) detected.add('other');
+
+  return TITLE_CATEGORIES
+    .filter(category => detected.has(category.id))
+    .map(category => category.id);
+}
+
 function compareUnicodeCharacters(a, b) {
   return (a.codePointAt(0) || 0) - (b.codePointAt(0) || 0);
 }

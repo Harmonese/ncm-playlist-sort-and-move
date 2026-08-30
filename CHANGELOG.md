@@ -6,10 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-08-30
+
+### Added
+
+- Added current-playlist writing-system detection so the title sorting dialog only shows categories present in the playlist.
+- Added deterministic categories for Han characters, Japanese kana, Hangul, Cyrillic, Greek, and Arabic writing systems.
+- Added tests for writing-system classification and empty-title handling.
+
+### Changed
+
+- Improved title sorting setup feedback and responsive layout for dynamic category lists.
+- Moved title sorting data loading before the settings dialog so the detected categories and sorted data use the same playlist snapshot.
+
 ## [0.5.2] - 2026-08-30
 
 ### Added
 
+- Added current-playlist writing-system detection so the title sorting dialog only shows categories present in the playlist.
 - Added configurable priority ordering for Latin letters, Han characters, Japanese kana, Hangul, Cyrillic, Greek, Arabic, numbers, and other characters.
 - Added selectable Han character ordering: pinyin, stroke, or Unicode.
 - Added a direct string comparison mode that disables character category priorities.
@@ -17,6 +31,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ### Changed
 
+- Improved title sorting setup feedback and responsive layout for dynamic category lists.
 - Reworked title sorting into a unified character-by-character comparator.
 - Removed automatic title prefix cleanup and whole-title category grouping.
 - Made pinyin ties continue to later characters before using raw Unicode as a final tie-breaker.

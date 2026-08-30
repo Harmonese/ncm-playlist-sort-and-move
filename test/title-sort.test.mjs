@@ -6,7 +6,8 @@ globalThis.pinyinPro = { pinyin };
 
 const {
   createTitleComparator,
-  DEFAULT_TITLE_SORT_CONFIG
+  DEFAULT_TITLE_SORT_CONFIG,
+  detectTitleCategoryIds
 } = await import('../src/sort/title.js');
 
 const song = (title, id) => ({ title, artist: '', album: '', id });
@@ -199,4 +200,39 @@ test('supported writing systems are classified into separate categories', () => 
   assert.deepEqual(orderedTitles.slice(0, 4), ['ع', 'Ω', 'Ж', '한']);
   assert.deepEqual(new Set(orderedTitles.slice(4, 6)), new Set(['あ', 'ア']));
   assert.deepEqual(orderedTitles.slice(6), ['汉', 'A', '١', '#']);
+});
+
+test('title category detection returns only categories present in the playlist', () => {
+  const categoryIds = detectTitleCategoryIds([
+    song('Éclair', 1),
+    song('漢字', 2),
+    song('アニメ', 3),
+    song('한글', 4),
+    song('Живой', 5),
+    song('Ωμέγα', 6),
+    song('عربي', 7),
+    song('123', 8),
+    song('!!!', 9)
+  ]);
+
+  assert.deepEqual(categoryIds, [
+    'latin',
+    'han',
+    'kana',
+    'hangul',
+    'cyrillic',
+    'greek',
+    'arabic',
+    'number',
+    'other'
+  ]);
+  assert.deepEqual(
+    detectTitleCategoryIds([song('Auto', 1), song('Autotune', 2)]),
+    ['latin']
+  );
+});
+
+test('empty titles still expose the other category', () => {
+  assert.deepEqual(detectTitleCategoryIds([song('', 1)]), ['other']);
+  assert.deepEqual(detectTitleCategoryIds([]), ['other']);
 });

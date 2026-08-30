@@ -1,15 +1,22 @@
 import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
-import { createTitleComparator } from '../sort/title.js';
+import { createTitleComparator, detectTitleCategoryIds } from '../sort/title.js';
+import { showTitleSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
 
-export async function sortByTitle(pid, sortConfig) {
-  showToast('开始获取歌单歌曲...');
+export async function sortByTitle(pid) {
+  showToast('开始获取歌单歌曲并识别文字体系...');
   const { playlist, items } = await getAllSongs(pid);
+  const categoryIds = detectTitleCategoryIds(items);
+  const settings = await showTitleSortDialog(categoryIds);
+
+  if (!settings.isConfirmed) return;
+
+  if (!confirm('将直接修改当前歌单内歌曲顺序（不可一键撤销）。继续？')) return;
 
   showToast(`获取完成：${items.length} 首，开始排序...`);
-  const ordered = items.slice().sort(createTitleComparator(sortConfig)).map(x => x.id);
+  const ordered = items.slice().sort(createTitleComparator(settings.value)).map(x => x.id);
 
   showToast('写回歌单顺序(op=update)...');
   const res = await updatePlaylistOrder(pid, ordered);

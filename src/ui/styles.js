@@ -367,6 +367,20 @@ export function installStyles() {
       line-height: 1.55 !important;
     }
 
+    .ncm-sort-detected {
+      display: inline-block;
+      max-width: 100%;
+      box-sizing: border-box;
+      margin-top: 10px !important;
+      padding: 5px 9px;
+      border: 1px solid #d7e8e5;
+      border-radius: 6px;
+      background: #f1f8f7;
+      color: #286b64 !important;
+      font-size: 12px !important;
+      line-height: 1.45 !important;
+    }
+
     .ncm-sort-warning {
       margin-top: 8px !important;
       color: #bd4848 !important;
