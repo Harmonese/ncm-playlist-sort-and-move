@@ -1,10 +1,11 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.6.1
+// @version      0.7.0
 // @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
+// @icon         https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/assets/icon.png
 // @homepageURL  https://github.com/Harmonese/ncm-playlist-sort-and-move
 // @supportURL   https://github.com/Harmonese/ncm-playlist-sort-and-move/issues
 // @updateURL    https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/ncm-playlist-sort-and-move.user.js
@@ -110,6 +111,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     pid,
     trackIds: JSON.stringify(ids),
     op: "del"
+  });
+  var addSongsToPlaylist = (pid, ids) => weapiPost("/api/playlist/manipulate/tracks", {
+    pid,
+    trackIds: JSON.stringify(ids),
+    op: "add"
   });
   var fetchAlbumDetail = (albumId) => weapiPost(`/api/v1/album/${albumId}`, {});
   var fetchSongRedCount = (songId) => weapiPost("/api/song/red/count", { songId });
@@ -733,6 +739,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       background: #f4f6f6;
     }
 
+    .ncm-sort-conditional.is-hidden {
+      display: none;
+    }
+
     .ncm-sort-priority-panel .ncm-sort-help {
       margin: 0 0 10px !important;
     }
@@ -1271,10 +1281,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       html: `
       <div class="ncm-sort-title-settings">
         <div class="ncm-sort-intro">
-          <p>\u9009\u62E9\u6807\u9898\u6587\u5B57\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
-          <p class="ncm-sort-help">\u6807\u9898\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
-          <p class="ncm-sort-help">\u8FD9\u5957\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6B4C\u624B\u6392\u5E8F\u201D\u5171\u4EAB\uFF0C\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
-          <p class="ncm-sort-help">\u6807\u9898\u548C\u6B4C\u624B\u5206\u522B\u68C0\u6D4B\u5404\u81EA\u6587\u672C\u4E2D\u51FA\u73B0\u7684\u6587\u5B57\u4F53\u7CFB\uFF0C\u56E0\u6B64\u7C7B\u522B\u6570\u91CF\u53EF\u80FD\u4E0D\u540C\u3002</p>
+          <p>\u9009\u62E9\u6807\u9898\u6392\u5E8F\u65B9\u5F0F</p>
+          <p class="ncm-sort-help">\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83</p>
           <p class="ncm-sort-detected">\u5F53\u524D\u6807\u9898\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
         </div>
 
@@ -1289,7 +1297,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>\u6587\u5B57\u4F53\u7CFB\u4F18\u5148\u7EA7</legend>
-          <p class="ncm-sort-help">\u4EC5\u663E\u793A\u5F53\u524D\u6B4C\u5355\u51FA\u73B0\u7684\u7C7B\u522B\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\uFF0C\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
           <ol id="title-priority-list" class="ncm-sort-priority-list">
             ${createTitleCategoryList(categories)}
           </ol>
@@ -1341,8 +1348,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       title: "\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
-        <p>\u9009\u62E9\u6392\u5E8F\u65B9\u5411\uFF1A</p>
-        <p class="ncm-sort-help">\u53D1\u884C\u65E5\u671F\u76F8\u540C\u65F6\uFF0C\u53EF\u7EE7\u7EED\u6309\u4E13\u8F91\u548C\u4E13\u8F91\u5185\u66F2\u76EE\u987A\u5E8F\u6392\u5217\u3002</p>
+        <p>\u9009\u62E9\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u65B9\u5F0F</p>
       </div>
       <div class="ncm-sort-date-order">
         <div class="ncm-sort-choice-list">
@@ -1405,15 +1411,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       title: "\u6309\u6B4C\u624B\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
-        <p>\u9009\u62E9\u6B4C\u624B\u6587\u5B57\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
-        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
-        <p class="ncm-sort-help">\u8FD9\u5957\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6807\u9898\u6392\u5E8F\u201D\u5171\u4EAB\uFF0C\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
-        <p class="ncm-sort-help">\u6807\u9898\u548C\u6B4C\u624B\u5206\u522B\u68C0\u6D4B\u5404\u81EA\u6587\u672C\u4E2D\u51FA\u73B0\u7684\u6587\u5B57\u4F53\u7CFB\uFF0C\u56E0\u6B64\u7C7B\u522B\u6570\u91CF\u53EF\u80FD\u4E0D\u540C\u3002</p>
+        <p>\u9009\u62E9\u6B4C\u624B\u6392\u5E8F\u65B9\u5F0F</p>
+        <p class="ncm-sort-help">\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83</p>
         <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u624B\u540D\u79F0\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
       </div>
-      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel">
-        <legend>\u6587\u5B57\u6BD4\u8F83\u89C4\u5219\uFF08\u4E0E\u6807\u9898\u6392\u5E8F\u5171\u4EAB\uFF09</legend>
-        <p class="ncm-sort-help">\u4FEE\u6539\u5E76\u786E\u8BA4\u540E\uFF0C\u6807\u9898\u6392\u5E8F\u548C\u6B4C\u624B\u6392\u5E8F\u90FD\u4F1A\u4F7F\u7528\u8FD9\u5957\u89C4\u5219\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002</p>
+      <div id="artist-text-settings" class="ncm-sort-priority-panel">
         <label class="ncm-sort-switch-row">
           <input id="artist-direct-compare" type="checkbox" ${textConfig.directStringCompare ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
@@ -1438,7 +1440,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             </select>
           </label>
         </fieldset>
-      </fieldset>
+      </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
           <input id="artist-sort-name" type="checkbox" ${artistConfig.sortArtistsByName ? "checked" : ""}>
@@ -1457,30 +1459,32 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           </span>
         </label>
       </div>
-      <div class="ncm-sort-date-order">
-        <p class="ncm-sort-help">\u540C\u4E00\u6B4C\u624B\u5185\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u65F6\uFF0C\u4F7F\u7528\u4E0B\u9762\u7684\u53D1\u884C\u65E5\u671F\u89C4\u5219\uFF1B\u4E0E\u201C\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u201D\u5171\u4EAB\u3002</p>
-        <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "is-selected" : ""}" data-artist-date-order data-descending="true" aria-pressed="${dateConfig.descending}">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
-          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "" : "is-selected"}" data-artist-date-order data-descending="false" aria-pressed="${!dateConfig.descending}">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+      <div id="artist-date-settings" class="ncm-sort-conditional ${artistConfig.sortSameArtistByDate ? "" : "is-hidden"}">
+        <div class="ncm-sort-date-order">
+          <p class="ncm-sort-help">\u540C\u4E00\u6B4C\u624B\u5185\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u65F6\uFF0C\u4F7F\u7528\u4E0B\u9762\u7684\u53D1\u884C\u65E5\u671F\u89C4\u5219</p>
+          <div class="ncm-sort-choice-list">
+            <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "is-selected" : ""}" data-artist-date-order data-descending="true" aria-pressed="${dateConfig.descending}">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+            <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "" : "is-selected"}" data-artist-date-order data-descending="false" aria-pressed="${!dateConfig.descending}">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+          </div>
         </div>
-      </div>
-      <div class="ncm-sort-date-settings">
-        <label class="ncm-sort-switch-row">
-          <input id="artist-date-sort-albums" type="checkbox" ${dateConfig.sortAlbumsByName ? "checked" : ""}>
-          <span class="ncm-sort-switch" aria-hidden="true"></span>
-          <span>
-            <span class="ncm-sort-switch-label">\u4E0D\u540C\u4E13\u8F91\u6309\u4E13\u8F91\u540D\u79F0\u6392\u5E8F</span>
-            <span class="ncm-sort-switch-help">\u5C06\u540C\u4E00\u53D1\u884C\u65E5\u671F\u4E0B\u7684\u6B4C\u66F2\u6309\u4E13\u8F91\u540D\u79F0\u805A\u62E2\u3002</span>
-          </span>
-        </label>
-        <label id="artist-date-sort-tracks-row" class="ncm-sort-switch-row ${dateConfig.sortAlbumsByName ? "" : "is-disabled"}">
-          <input id="artist-date-sort-tracks" type="checkbox" ${dateConfig.sortAlbumTracks ? "checked" : ""} ${dateConfig.sortAlbumsByName ? "" : "disabled"}>
-          <span class="ncm-sort-switch" aria-hidden="true"></span>
-          <span>
-            <span class="ncm-sort-switch-label">\u540C\u4E00\u4E13\u8F91\u6309\u4E13\u8F91\u5185\u6B4C\u66F2\u987A\u5E8F\u6392\u5E8F</span>
-            <span class="ncm-sort-switch-help">\u9700\u8981\u5148\u5F00\u542F\u4E0A\u9762\u7684\u4E13\u8F91\u540D\u79F0\u6392\u5E8F\u3002</span>
-          </span>
-        </label>
+        <div class="ncm-sort-date-settings">
+          <label class="ncm-sort-switch-row">
+            <input id="artist-date-sort-albums" type="checkbox" ${dateConfig.sortAlbumsByName ? "checked" : ""}>
+            <span class="ncm-sort-switch" aria-hidden="true"></span>
+            <span>
+              <span class="ncm-sort-switch-label">\u4E0D\u540C\u4E13\u8F91\u6309\u4E13\u8F91\u540D\u79F0\u6392\u5E8F</span>
+              <span class="ncm-sort-switch-help">\u5C06\u540C\u4E00\u53D1\u884C\u65E5\u671F\u4E0B\u7684\u6B4C\u66F2\u6309\u4E13\u8F91\u540D\u79F0\u805A\u62E2\u3002</span>
+            </span>
+          </label>
+          <label id="artist-date-sort-tracks-row" class="ncm-sort-switch-row ${dateConfig.sortAlbumsByName ? "" : "is-disabled"}">
+            <input id="artist-date-sort-tracks" type="checkbox" ${dateConfig.sortAlbumTracks ? "checked" : ""} ${dateConfig.sortAlbumsByName ? "" : "disabled"}>
+            <span class="ncm-sort-switch" aria-hidden="true"></span>
+            <span>
+              <span class="ncm-sort-switch-label">\u540C\u4E00\u4E13\u8F91\u6309\u4E13\u8F91\u5185\u6B4C\u66F2\u987A\u5E8F\u6392\u5E8F</span>
+              <span class="ncm-sort-switch-help">\u9700\u8981\u5148\u5F00\u542F\u4E0A\u9762\u7684\u4E13\u8F91\u540D\u79F0\u6392\u5E8F\u3002</span>
+            </span>
+          </label>
+        </div>
       </div>
     `,
       showConfirmButton: true,
@@ -1493,6 +1497,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         const list = document.getElementById("artist-priority-list");
         const orderButtons = [...document.querySelectorAll("[data-artist-date-order]")];
         const albumSort = document.getElementById("artist-date-sort-albums");
+        const sameArtistDate = document.getElementById("artist-sort-date");
+        const artistDateSettings = document.getElementById("artist-date-settings");
         directCompare.addEventListener("change", () => {
           setPriorityDisabled(directCompare.checked, "artist");
         });
@@ -1520,6 +1526,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         });
         albumSort.addEventListener("change", () => {
           setDateTrackSortDisabled(!albumSort.checked, "artist-date");
+        });
+        sameArtistDate.addEventListener("change", () => {
+          artistDateSettings.classList.toggle("is-hidden", !sameArtistDate.checked);
         });
         setPriorityDisabled(directCompare.checked, "artist");
         setDateTrackSortDisabled(!albumSort.checked, "artist-date");
@@ -1577,12 +1586,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
   function showRestoreOrderDialog(backup) {
     const createdAt = backup.createdAt ? new Date(backup.createdAt).toLocaleString() : "\u672A\u77E5\u65F6\u95F4";
+    const operationText = backup.operation === "delete" ? `\u5C06\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u5DF2\u5220\u9664\u6B4C\u66F2\u5E76\u6062\u590D\u987A\u5E8F` : backup.operation === "move" ? "\u5C06\u6062\u590D\u79FB\u52A8\u524D\u7684\u6B4C\u66F2\u987A\u5E8F" : "\u5C06\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u66F2\u987A\u5E8F";
     return Swal.fire({
       icon: "warning",
-      title: "\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\uFF1F",
+      title: "\u6062\u590D\u4E0A\u6B21\u64CD\u4F5C\u524D\u987A\u5E8F\uFF1F",
       text: `${backup.playlistName || "\u5F53\u524D\u6B4C\u5355"}
 \u5907\u4EFD\u65F6\u95F4\uFF1A${createdAt}
-\u5171 ${backup.songIds.length} \u9996\u6B4C\u66F2`,
+${operationText}`,
       showConfirmButton: true,
       showCancelButton: true,
       confirmButtonText: "\u6062\u590D\u987A\u5E8F",
@@ -1706,14 +1716,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
   // src/settings/order-backup.js
   var ORDER_BACKUP_KEY = "ncm-playlist-sort:last-order-backup";
+  var ORDER_BACKUP_OPERATIONS = /* @__PURE__ */ new Set(["sort", "move", "delete"]);
   function normalizeBackup(backup) {
     if (!backup || typeof backup !== "object") return null;
     if (backup.pid === null || backup.pid === void 0) return null;
     if (!Array.isArray(backup.songIds) || !backup.songIds.length) return null;
+    const operation = ORDER_BACKUP_OPERATIONS.has(backup.operation) ? backup.operation : "sort";
+    const songIds = backup.songIds.map((id) => String(id));
+    const songIdSet = new Set(songIds);
     return {
       pid: String(backup.pid),
       playlistName: typeof backup.playlistName === "string" ? backup.playlistName : "",
-      songIds: backup.songIds.map((id) => String(id)),
+      operation,
+      songIds,
+      removedSongIds: operation === "delete" ? [...new Set((backup.removedSongIds || []).map((id) => String(id)))].filter((id) => songIdSet.has(id)) : [],
       createdAt: Number.isFinite(backup.createdAt) ? backup.createdAt : 0
     };
   }
@@ -1726,11 +1742,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       return null;
     }
   }
-  async function saveOrderBackup(pid, songIds, playlistName = "") {
+  async function saveOrderBackup(pid, songIds, playlistName = "", { operation = "sort", removedSongIds = [] } = {}) {
     const backup = normalizeBackup({
       pid,
       playlistName,
+      operation,
       songIds,
+      removedSongIds,
       createdAt: Date.now()
     });
     if (!backup) return false;
@@ -1761,7 +1779,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF0C\u6392\u5E8F\u540E\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u3002\u7EE7\u7EED\uFF1F")) return;
     showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
     const ordered = items.slice().sort(createTitleComparator(settings.value)).map((x) => x.id);
-    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
     const res = await updatePlaylistOrder(pid, ordered);
     if (res && res.code === 200) {
@@ -1823,7 +1841,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       await ensurePublishTimes(items);
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
       const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map((x) => x.id);
-      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
       if (res && res.code === 200) {
@@ -1879,7 +1897,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         dateSortConfig
       );
       const ordered = orderedItems.map((item) => item.id);
-      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
       if (res && res.code === 200) {
@@ -2072,7 +2090,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     if (!result.isConfirmed) return;
     const { start, end, target } = result.value;
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-    const { playlist, items } = await getAllSongs(pid);
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
     const totalCount = items.length;
     if (start > totalCount || end > totalCount || target > totalCount) {
       Swal.fire({
@@ -2103,13 +2121,14 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
     newOrder.splice(insertIdx + 1, 0, ...movedSongs);
     const orderedIds = newOrder.map((x) => x.id);
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "move" });
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F...");
     const res = await updatePlaylistOrder(pid, orderedIds);
     if (res && res.code === 200) {
       Swal.fire({
         icon: "success",
         title: "\u79FB\u52A8\u5B8C\u6210",
-        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762<br>${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u79FB\u52A8\u524D\u987A\u5E8F<br>" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
         customClass: swalClasses
       });
     } else {
@@ -2128,7 +2147,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     if (!result.isConfirmed) return;
     const { start, end } = result.value;
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-    const { playlist, items } = await getAllSongs(pid);
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
     const totalCount = items.length;
     if (start > totalCount || end > totalCount) {
       Swal.fire({
@@ -2145,13 +2164,17 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     const toDeleteIds = items.slice(startIdx, endIdx + 1).map((x) => x.id);
     const confirm2 = await showDeleteConfirmation(toDeleteCount, start, end);
     if (!confirm2.isConfirmed) return;
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, {
+      operation: "delete",
+      removedSongIds: toDeleteIds
+    });
     showToast("\u6B63\u5728\u5220\u9664\u6B4C\u66F2...");
     const res = await deleteSongsFromPlaylist(pid, toDeleteIds);
     if (res && res.code === 200) {
       Swal.fire({
         icon: "success",
         title: "\u5220\u9664\u5B8C\u6210",
-        html: `\u5DF2\u5220\u9664 ${toDeleteCount} \u9996\u6B4C\u66F2<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u7ED3\u679C`,
+        html: `\u5DF2\u5220\u9664 ${toDeleteCount} \u9996\u6B4C\u66F2<br>${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u5220\u9664\u524D\u987A\u5E8F<br>" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u7ED3\u679C`,
         customClass: swalClasses
       });
     } else {
@@ -2183,13 +2206,18 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
     return true;
   }
+  function getExpectedCurrentIds(backup) {
+    if (backup.operation !== "delete") return backup.songIds;
+    const removedIds = new Set(backup.removedSongIds);
+    return backup.songIds.filter((id) => !removedIds.has(id));
+  }
   async function restoreLastOrder(pid) {
     const backup = await loadOrderBackup();
     if (!backup || backup.pid !== String(pid)) {
       Swal.fire({
         icon: "info",
         title: "\u6CA1\u6709\u53EF\u6062\u590D\u7684\u987A\u5E8F",
-        text: "\u5F53\u524D\u6B4C\u5355\u8FD8\u6CA1\u6709\u6210\u529F\u6392\u5E8F\u8FC7\uFF0C\u6216\u5907\u4EFD\u5C5E\u4E8E\u5176\u4ED6\u6B4C\u5355\u3002",
+        text: "\u5F53\u524D\u6B4C\u5355\u8FD8\u6CA1\u6709\u53EF\u6062\u590D\u7684\u987A\u5E8F\u53D8\u66F4\uFF0C\u6216\u5907\u4EFD\u5C5E\u4E8E\u5176\u4ED6\u6B4C\u5355\u3002",
         customClass: swalClasses
       });
       return;
@@ -2203,7 +2231,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         throw new Error("playlist/detail failed: " + JSON.stringify(detail));
       }
       const currentIds = getPlaylistTrackIds(detail.playlist);
-      if (!sameSongSet(currentIds, backup.songIds)) {
+      if (!sameSongSet(currentIds, getExpectedCurrentIds(backup))) {
         Swal.fire({
           icon: "warning",
           title: "\u65E0\u6CD5\u5B89\u5168\u6062\u590D",
@@ -2212,7 +2240,20 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         });
         return;
       }
-      showToast("\u6B63\u5728\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u5355\u987A\u5E8F...");
+      if (backup.operation === "delete") {
+        showToast(`\u6B63\u5728\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u6B4C\u66F2...`);
+        const addResult = await addSongsToPlaylist(pid, backup.removedSongIds);
+        if (!addResult || addResult.code !== 200) {
+          Swal.fire({
+            icon: "error",
+            title: "\u91CD\u65B0\u52A0\u5165\u6B4C\u66F2\u5931\u8D25",
+            text: JSON.stringify(addResult),
+            customClass: swalClasses
+          });
+          return;
+        }
+      }
+      showToast("\u6B63\u5728\u6062\u590D\u64CD\u4F5C\u524D\u7684\u6B4C\u5355\u987A\u5E8F...");
       const result = await updatePlaylistOrder(pid, backup.songIds);
       if (!result || result.code !== 200) {
         Swal.fire({
@@ -2228,7 +2269,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         icon: "success",
         title: "\u6062\u590D\u5B8C\u6210",
         text: `${backup.playlistName || "\u5F53\u524D\u6B4C\u5355"}
-\u5DF2\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u66F2\u987A\u5E8F
+\u5DF2\u6062\u590D\u64CD\u4F5C\u524D\u7684\u6B4C\u66F2\u987A\u5E8F
 \u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
         customClass: swalClasses
       });
@@ -2255,7 +2296,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
         <button id="sort-by-heat" class="ncm-sort-menu-button">\u6309\u70ED\u5EA6\u6392\u5E8F</button>
-        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">\u6062\u590D\u4E0A\u6B21\u6392\u5E8F\u524D\u987A\u5E8F</button>' : ""}
+        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">\u6062\u590D\u4E0A\u6B21\u64CD\u4F5C\u524D\u987A\u5E8F</button>' : ""}
         <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
       </div>

@@ -19,7 +19,7 @@ export async function showFunctionMenu(pid) {
         <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">按歌手排序</button>
         <button id="sort-by-heat" class="ncm-sort-menu-button">按热度排序</button>
-        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">恢复上次排序前顺序</button>' : ''}
+        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">恢复上次操作前顺序</button>' : ''}
         <button id="batch-move" class="ncm-sort-menu-button">批量移动歌曲</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">批量删除歌曲</button>
       </div>

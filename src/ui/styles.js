@@ -294,6 +294,10 @@ export function installStyles() {
       background: #f4f6f6;
     }
 
+    .ncm-sort-conditional.is-hidden {
+      display: none;
+    }
+
     .ncm-sort-priority-panel .ncm-sort-help {
       margin: 0 0 10px !important;
     }

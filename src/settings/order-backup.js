@@ -1,16 +1,27 @@
 import { readStoredValue, writeStoredValue } from './storage.js';
 
 export const ORDER_BACKUP_KEY = 'ncm-playlist-sort:last-order-backup';
+const ORDER_BACKUP_OPERATIONS = new Set(['sort', 'move', 'delete']);
 
 function normalizeBackup(backup) {
   if (!backup || typeof backup !== 'object') return null;
   if (backup.pid === null || backup.pid === undefined) return null;
   if (!Array.isArray(backup.songIds) || !backup.songIds.length) return null;
 
+  const operation = ORDER_BACKUP_OPERATIONS.has(backup.operation)
+    ? backup.operation
+    : 'sort';
+  const songIds = backup.songIds.map(id => String(id));
+  const songIdSet = new Set(songIds);
+
   return {
     pid: String(backup.pid),
     playlistName: typeof backup.playlistName === 'string' ? backup.playlistName : '',
-    songIds: backup.songIds.map(id => String(id)),
+    operation,
+    songIds,
+    removedSongIds: operation === 'delete'
+      ? [...new Set((backup.removedSongIds || []).map(id => String(id)))].filter(id => songIdSet.has(id))
+      : [],
     createdAt: Number.isFinite(backup.createdAt) ? backup.createdAt : 0
   };
 }
@@ -25,11 +36,18 @@ export async function loadOrderBackup() {
   }
 }
 
-export async function saveOrderBackup(pid, songIds, playlistName = '') {
+export async function saveOrderBackup(
+  pid,
+  songIds,
+  playlistName = '',
+  { operation = 'sort', removedSongIds = [] } = {}
+) {
   const backup = normalizeBackup({
     pid,
     playlistName,
+    operation,
     songIds,
+    removedSongIds,
     createdAt: Date.now()
   });
 

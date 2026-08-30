@@ -130,10 +130,8 @@ export async function showTitleSortDialog(categoryIds) {
     html: `
       <div class="ncm-sort-title-settings">
         <div class="ncm-sort-intro">
-          <p>选择标题文字的比较方式：</p>
-          <p class="ncm-sort-help">标题会从左到右逐个字符比较。</p>
-          <p class="ncm-sort-help">这套文字规则与“按歌手排序”共享，上次使用的设置会自动恢复。</p>
-          <p class="ncm-sort-help">标题和歌手分别检测各自文本中出现的文字体系，因此类别数量可能不同。</p>
+          <p>选择标题排序方式</p>
+          <p class="ncm-sort-help">从左到右逐个字符比较</p>
           <p class="ncm-sort-detected">当前标题：${categories.length} 类（${categoryNames}）</p>
         </div>
 
@@ -148,7 +146,6 @@ export async function showTitleSortDialog(categoryIds) {
 
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>文字体系优先级</legend>
-          <p class="ncm-sort-help">仅显示当前歌单出现的类别。越靠上优先级越高，每个标题位置都会使用同一套顺序。</p>
           <ol id="title-priority-list" class="ncm-sort-priority-list">
             ${createTitleCategoryList(categories)}
           </ol>
@@ -210,8 +207,7 @@ export async function showDateSortDialog() {
     title: '按发行日期排序',
     html: `
       <div class="ncm-sort-intro">
-        <p>选择排序方向：</p>
-        <p class="ncm-sort-help">发行日期相同时，可继续按专辑和专辑内曲目顺序排列。</p>
+        <p>选择发行日期排序方式</p>
       </div>
       <div class="ncm-sort-date-order">
         <div class="ncm-sort-choice-list">
@@ -279,15 +275,11 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
     title: '按歌手排序',
     html: `
       <div class="ncm-sort-intro">
-        <p>选择歌手文字的比较方式：</p>
-        <p class="ncm-sort-help">歌手名称会从左到右逐个字符比较。</p>
-        <p class="ncm-sort-help">这套文字规则与“按标题排序”共享，上次使用的设置会自动恢复。</p>
-        <p class="ncm-sort-help">标题和歌手分别检测各自文本中出现的文字体系，因此类别数量可能不同。</p>
+        <p>选择歌手排序方式</p>
+        <p class="ncm-sort-help">从左到右逐个字符比较</p>
         <p class="ncm-sort-detected">当前歌手名称：${categories.length} 类（${categoryNames}）</p>
       </div>
-      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel">
-        <legend>文字比较规则（与标题排序共享）</legend>
-        <p class="ncm-sort-help">修改并确认后，标题排序和歌手排序都会使用这套规则。越靠上优先级越高。</p>
+      <div id="artist-text-settings" class="ncm-sort-priority-panel">
         <label class="ncm-sort-switch-row">
           <input id="artist-direct-compare" type="checkbox" ${textConfig.directStringCompare ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
@@ -312,7 +304,7 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
             </select>
           </label>
         </fieldset>
-      </fieldset>
+      </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
           <input id="artist-sort-name" type="checkbox" ${artistConfig.sortArtistsByName ? 'checked' : ''}>
@@ -331,30 +323,32 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
           </span>
         </label>
       </div>
-      <div class="ncm-sort-date-order">
-        <p class="ncm-sort-help">同一歌手内按发行日期排序时，使用下面的发行日期规则；与“按发行日期排序”共享。</p>
-        <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? 'is-selected' : ''}" data-artist-date-order data-descending="true" aria-pressed="${dateConfig.descending}">从新到旧（倒序）</button>
-          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? '' : 'is-selected'}" data-artist-date-order data-descending="false" aria-pressed="${!dateConfig.descending}">从旧到新（顺序）</button>
+      <div id="artist-date-settings" class="ncm-sort-conditional ${artistConfig.sortSameArtistByDate ? '' : 'is-hidden'}">
+        <div class="ncm-sort-date-order">
+          <p class="ncm-sort-help">同一歌手内按发行日期排序时，使用下面的发行日期规则</p>
+          <div class="ncm-sort-choice-list">
+            <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? 'is-selected' : ''}" data-artist-date-order data-descending="true" aria-pressed="${dateConfig.descending}">从新到旧（倒序）</button>
+            <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? '' : 'is-selected'}" data-artist-date-order data-descending="false" aria-pressed="${!dateConfig.descending}">从旧到新（顺序）</button>
+          </div>
         </div>
-      </div>
-      <div class="ncm-sort-date-settings">
-        <label class="ncm-sort-switch-row">
-          <input id="artist-date-sort-albums" type="checkbox" ${dateConfig.sortAlbumsByName ? 'checked' : ''}>
-          <span class="ncm-sort-switch" aria-hidden="true"></span>
-          <span>
-            <span class="ncm-sort-switch-label">不同专辑按专辑名称排序</span>
-            <span class="ncm-sort-switch-help">将同一发行日期下的歌曲按专辑名称聚拢。</span>
-          </span>
-        </label>
-        <label id="artist-date-sort-tracks-row" class="ncm-sort-switch-row ${dateConfig.sortAlbumsByName ? '' : 'is-disabled'}">
-          <input id="artist-date-sort-tracks" type="checkbox" ${dateConfig.sortAlbumTracks ? 'checked' : ''} ${dateConfig.sortAlbumsByName ? '' : 'disabled'}>
-          <span class="ncm-sort-switch" aria-hidden="true"></span>
-          <span>
-            <span class="ncm-sort-switch-label">同一专辑按专辑内歌曲顺序排序</span>
-            <span class="ncm-sort-switch-help">需要先开启上面的专辑名称排序。</span>
-          </span>
-        </label>
+        <div class="ncm-sort-date-settings">
+          <label class="ncm-sort-switch-row">
+            <input id="artist-date-sort-albums" type="checkbox" ${dateConfig.sortAlbumsByName ? 'checked' : ''}>
+            <span class="ncm-sort-switch" aria-hidden="true"></span>
+            <span>
+              <span class="ncm-sort-switch-label">不同专辑按专辑名称排序</span>
+              <span class="ncm-sort-switch-help">将同一发行日期下的歌曲按专辑名称聚拢。</span>
+            </span>
+          </label>
+          <label id="artist-date-sort-tracks-row" class="ncm-sort-switch-row ${dateConfig.sortAlbumsByName ? '' : 'is-disabled'}">
+            <input id="artist-date-sort-tracks" type="checkbox" ${dateConfig.sortAlbumTracks ? 'checked' : ''} ${dateConfig.sortAlbumsByName ? '' : 'disabled'}>
+            <span class="ncm-sort-switch" aria-hidden="true"></span>
+            <span>
+              <span class="ncm-sort-switch-label">同一专辑按专辑内歌曲顺序排序</span>
+              <span class="ncm-sort-switch-help">需要先开启上面的专辑名称排序。</span>
+            </span>
+          </label>
+        </div>
       </div>
     `,
     showConfirmButton: true,
@@ -367,6 +361,8 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
       const list = document.getElementById('artist-priority-list');
       const orderButtons = [...document.querySelectorAll('[data-artist-date-order]')];
       const albumSort = document.getElementById('artist-date-sort-albums');
+      const sameArtistDate = document.getElementById('artist-sort-date');
+      const artistDateSettings = document.getElementById('artist-date-settings');
 
       directCompare.addEventListener('change', () => {
         setPriorityDisabled(directCompare.checked, 'artist');
@@ -402,6 +398,10 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
 
       albumSort.addEventListener('change', () => {
         setDateTrackSortDisabled(!albumSort.checked, 'artist-date');
+      });
+
+      sameArtistDate.addEventListener('change', () => {
+        artistDateSettings.classList.toggle('is-hidden', !sameArtistDate.checked);
       });
 
       setPriorityDisabled(directCompare.checked, 'artist');
@@ -465,11 +465,16 @@ export function showRestoreOrderDialog(backup) {
   const createdAt = backup.createdAt
     ? new Date(backup.createdAt).toLocaleString()
     : '未知时间';
+  const operationText = backup.operation === 'delete'
+    ? `将重新加入 ${backup.removedSongIds.length} 首已删除歌曲并恢复顺序`
+    : backup.operation === 'move'
+      ? '将恢复移动前的歌曲顺序'
+      : '将恢复排序前的歌曲顺序';
 
   return Swal.fire({
     icon: 'warning',
-    title: '恢复排序前顺序？',
-    text: `${backup.playlistName || '当前歌单'}\n备份时间：${createdAt}\n共 ${backup.songIds.length} 首歌曲`,
+    title: '恢复上次操作前顺序？',
+    text: `${backup.playlistName || '当前歌单'}\n备份时间：${createdAt}\n${operationText}`,
     showConfirmButton: true,
     showCancelButton: true,
     confirmButtonText: '恢复顺序',

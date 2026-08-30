@@ -146,13 +146,23 @@ test('order backup preserves the playlist identity and can be cleared', async ()
   assert.deepEqual({
     pid: '123',
     playlistName: '测试歌单',
-    songIds: ['3', '1', '2']
+    operation: 'sort',
+    songIds: ['3', '1', '2'],
+    removedSongIds: []
   }, {
     pid: backup.pid,
     playlistName: backup.playlistName,
-    songIds: backup.songIds
+    operation: backup.operation,
+    songIds: backup.songIds,
+    removedSongIds: backup.removedSongIds
   });
   assert.equal(typeof backup.createdAt, 'number');
+
+  await saveOrderBackup('123', [3, 1, 2], '测试歌单', {
+    operation: 'delete',
+    removedSongIds: [1]
+  });
+  assert.deepEqual((await loadOrderBackup()).removedSongIds, ['1']);
 
   assert.equal(await clearOrderBackup(), true);
   assert.equal(await loadOrderBackup(), null);

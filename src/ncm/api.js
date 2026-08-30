@@ -20,6 +20,13 @@ export const deleteSongsFromPlaylist = (pid, ids) =>
     op: 'del'
   });
 
+export const addSongsToPlaylist = (pid, ids) =>
+  weapiPost('/api/playlist/manipulate/tracks', {
+    pid,
+    trackIds: JSON.stringify(ids),
+    op: 'add'
+  });
+
 export const fetchAlbumDetail = (albumId) =>
   weapiPost(`/api/v1/album/${albumId}`, {});
 

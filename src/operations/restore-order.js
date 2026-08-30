@@ -1,5 +1,5 @@
 import { showToast } from '../utils/dom.js';
-import { fetchPlaylistDetail, updatePlaylistOrder } from '../ncm/api.js';
+import { addSongsToPlaylist, fetchPlaylistDetail, updatePlaylistOrder } from '../ncm/api.js';
 import { getPlaylistTrackIds } from '../data/playlist.js';
 import { clearOrderBackup, loadOrderBackup } from '../settings/order-backup.js';
 import { showRestoreOrderDialog } from '../ui/dialogs.js';
@@ -28,13 +28,20 @@ function sameSongSet(currentIds, backupIds) {
   return true;
 }
 
+function getExpectedCurrentIds(backup) {
+  if (backup.operation !== 'delete') return backup.songIds;
+
+  const removedIds = new Set(backup.removedSongIds);
+  return backup.songIds.filter(id => !removedIds.has(id));
+}
+
 export async function restoreLastOrder(pid) {
   const backup = await loadOrderBackup();
   if (!backup || backup.pid !== String(pid)) {
     Swal.fire({
       icon: 'info',
       title: '没有可恢复的顺序',
-      text: '当前歌单还没有成功排序过，或备份属于其他歌单。',
+      text: '当前歌单还没有可恢复的顺序变更，或备份属于其他歌单。',
       customClass: swalClasses
     });
     return;
@@ -51,7 +58,7 @@ export async function restoreLastOrder(pid) {
     }
 
     const currentIds = getPlaylistTrackIds(detail.playlist);
-    if (!sameSongSet(currentIds, backup.songIds)) {
+    if (!sameSongSet(currentIds, getExpectedCurrentIds(backup))) {
       Swal.fire({
         icon: 'warning',
         title: '无法安全恢复',
@@ -61,7 +68,21 @@ export async function restoreLastOrder(pid) {
       return;
     }
 
-    showToast('正在恢复排序前的歌单顺序...');
+    if (backup.operation === 'delete') {
+      showToast(`正在重新加入 ${backup.removedSongIds.length} 首歌曲...`);
+      const addResult = await addSongsToPlaylist(pid, backup.removedSongIds);
+      if (!addResult || addResult.code !== 200) {
+        Swal.fire({
+          icon: 'error',
+          title: '重新加入歌曲失败',
+          text: JSON.stringify(addResult),
+          customClass: swalClasses
+        });
+        return;
+      }
+    }
+
+    showToast('正在恢复操作前的歌单顺序...');
     const result = await updatePlaylistOrder(pid, backup.songIds);
     if (!result || result.code !== 200) {
       Swal.fire({
@@ -77,7 +98,7 @@ export async function restoreLastOrder(pid) {
     Swal.fire({
       icon: 'success',
       title: '恢复完成',
-      text: `${backup.playlistName || '当前歌单'}\n已恢复排序前的歌曲顺序\n刷新页面查看新顺序`,
+      text: `${backup.playlistName || '当前歌单'}\n已恢复操作前的歌曲顺序\n刷新页面查看新顺序`,
       customClass: swalClasses
     });
   } catch (error) {

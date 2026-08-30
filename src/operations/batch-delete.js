@@ -3,6 +3,7 @@ import { deleteSongsFromPlaylist } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { showBatchDeleteDialog, showDeleteConfirmation } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
+import { saveOrderBackup } from '../settings/order-backup.js';
 
 export async function batchDeleteSongs(pid) {
   const result = await showBatchDeleteDialog();
@@ -11,7 +12,7 @@ export async function batchDeleteSongs(pid) {
   const { start, end } = result.value;
 
   showToast('开始获取歌单歌曲...');
-  const { playlist, items } = await getAllSongs(pid);
+  const { playlist, items, originalSongIds } = await getAllSongs(pid);
   const totalCount = items.length;
 
   if (start > totalCount || end > totalCount) {
@@ -34,6 +35,10 @@ export async function batchDeleteSongs(pid) {
 
   if (!confirm2.isConfirmed) return;
 
+  const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, {
+    operation: 'delete',
+    removedSongIds: toDeleteIds
+  });
   showToast('正在删除歌曲...');
   const res = await deleteSongsFromPlaylist(pid, toDeleteIds);
 
@@ -41,7 +46,7 @@ export async function batchDeleteSongs(pid) {
     Swal.fire({
       icon: 'success',
       title: '删除完成',
-      html: `已删除 ${toDeleteCount} 首歌曲<br>刷新页面查看结果`,
+      html: `已删除 ${toDeleteCount} 首歌曲<br>${backupSaved ? '可从工具菜单恢复删除前顺序<br>' : ''}刷新页面查看结果`,
       customClass: swalClasses
     });
   } else {

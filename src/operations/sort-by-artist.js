@@ -39,7 +39,7 @@ export async function sortByArtist(pid) {
     );
     const ordered = orderedItems.map(item => item.id);
 
-    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: 'sort' });
     showToast('写回歌单顺序(op=update)...');
     const res = await updatePlaylistOrder(pid, ordered);
 

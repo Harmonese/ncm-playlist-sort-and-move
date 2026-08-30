@@ -22,7 +22,7 @@ export async function sortByTitle(pid) {
   showToast(`获取完成：${items.length} 首，开始排序...`);
   const ordered = items.slice().sort(createTitleComparator(settings.value)).map(x => x.id);
 
-  const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+  const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: 'sort' });
   showToast('写回歌单顺序(op=update)...');
   const res = await updatePlaylistOrder(pid, ordered);
   if (res && res.code === 200) {

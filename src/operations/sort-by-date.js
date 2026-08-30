@@ -26,7 +26,7 @@ export async function performDateSort(pid, descending, dateSortConfig) {
     showToast(`获取完成：${items.length} 首，开始排序...`);
     const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map(x => x.id);
 
-    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: 'sort' });
     showToast('写回歌单顺序(op=update)...');
     const res = await updatePlaylistOrder(pid, ordered);
 
