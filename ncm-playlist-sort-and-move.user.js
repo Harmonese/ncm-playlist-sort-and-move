@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.5
-// @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
+// @version      0.6.0
+// @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
 // @homepageURL  https://github.com/Harmonese/ncm-playlist-sort-and-move
@@ -112,6 +112,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     op: "del"
   });
   var fetchAlbumDetail = (albumId) => weapiPost(`/api/v1/album/${albumId}`, {});
+  var fetchSongRedCount = (songId) => weapiPost("/api/song/red/count", { songId });
+  var fetchSongCommentCounts = (songIds) => weapiPost("/api/resource/commentInfo/list", {
+    resourceType: "4",
+    resourceIds: JSON.stringify(songIds)
+  });
 
   // src/data/song.js
   function getArtistText(song) {
@@ -128,43 +133,74 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const number = Number.parseInt(value, 10);
     return Number.isFinite(number) && number > 0 ? number : 0;
   }
-  function toSongItem(song) {
+  function getNonNegativeNumber(value) {
+    if (value === null || value === void 0 || value === "") return null;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : null;
+  }
+  function toSongItem(song, originalIndex = null) {
     return {
       id: song.id,
+      originalIndex,
       title: song.name || "",
       artist: getArtistText(song),
       album: getAlbumText(song),
       albumId: song.al?.id || 0,
       albumDiscNo: getPositiveNumber(song.disc || song.cd),
       albumTrackNo: getPositiveNumber(song.no),
-      publishTime: song.publishTime || 0
+      publishTime: song.publishTime || 0,
+      redCount: getNonNegativeNumber(song.redCount),
+      popularity: getNonNegativeNumber(song.popularity ?? song.pop),
+      commentCount: getNonNegativeNumber(song.commentCount)
     };
   }
 
   // src/data/playlist.js
+  function getPlaylistTrackIds(playlist) {
+    if (Array.isArray(playlist?.trackIds) && playlist.trackIds.length) {
+      return playlist.trackIds.map((track) => track.id);
+    }
+    return (playlist?.tracks || []).map((song) => song.id);
+  }
   async function getAllSongs(pid) {
     const detail = await fetchPlaylistDetail(pid);
     if (!detail || detail.code !== 200) throw new Error("playlist/detail failed: " + JSON.stringify(detail));
     const pl = detail.playlist;
+    const originalSongIds = getPlaylistTrackIds(pl);
+    const originalIndexById = new Map(
+      originalSongIds.map((id, index) => [String(id), index])
+    );
     const items = [];
-    if (pl.trackCount > (pl.tracks?.length || 0)) {
-      const trackIds = (pl.trackIds || []).map((t) => ({ id: t.id }));
+    if (pl.trackCount > (pl.tracks?.length || 0) && originalSongIds.length) {
+      const trackIds = originalSongIds.map((id) => ({ id }));
       const chunkSize = 1e3;
       for (let i = 0; i < trackIds.length; i += chunkSize) {
         showToast(`\u62C9\u53D6\u6B4C\u66F2\u8BE6\u60C5 ${i + 1}-${Math.min(i + chunkSize, trackIds.length)}/${trackIds.length}`);
         const part = await fetchSongDetailByIds(trackIds.slice(i, i + chunkSize));
         if (!part || part.code !== 200) throw new Error("song/detail failed at " + i);
         for (const song of part.songs || []) {
-          items.push(toSongItem(song));
+          items.push(toSongItem(song, originalIndexById.get(String(song.id)) ?? items.length));
         }
         await sleep(120);
       }
     } else {
-      for (const song of pl.tracks || []) {
-        items.push(toSongItem(song));
+      for (const [index, song] of (pl.tracks || []).entries()) {
+        items.push(toSongItem(song, originalIndexById.get(String(song.id)) ?? index));
       }
     }
-    return { playlist: pl, items };
+    items.sort((a, b) => a.originalIndex - b.originalIndex);
+    return { playlist: pl, items, originalSongIds };
+  }
+
+  // src/sort/order.js
+  function getOriginalIndex(item, fallbackIndex = 0) {
+    return Number.isInteger(item?.originalIndex) && item.originalIndex >= 0 ? item.originalIndex : fallbackIndex;
+  }
+  function compareOriginalOrder(a, b) {
+    if (!Number.isInteger(a?.originalIndex) || !Number.isInteger(b?.originalIndex)) {
+      return 0;
+    }
+    return a.originalIndex - b.originalIndex;
   }
 
   // src/sort/title.js
@@ -351,7 +387,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       if (artistResult) return artistResult;
       const albumResult = collator.compare(a.album || "", b.album || "");
       if (albumResult) return albumResult;
-      return a.id - b.id;
+      return compareOriginalOrder(a, b);
     };
   }
   var cmpByTitle = createTitleComparator();
@@ -1010,14 +1046,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const groups = [];
     const groupsByArtist = /* @__PURE__ */ new Map();
     items.forEach((item, index) => {
+      const originalIndex = getOriginalIndex(item, index);
       const artist = item.artist || "";
       let group = groupsByArtist.get(artist);
       if (!group) {
-        group = { artist, index, items: [] };
+        group = { artist, index: originalIndex, items: [] };
         groupsByArtist.set(artist, group);
         groups.push(group);
       }
-      group.items.push({ item, index });
+      group.items.push({ item, index: originalIndex });
     });
     if (normalizedConfig.sortArtistsByName) {
       groups.sort((a, b) => compareArtist(a.artist, b.artist) || a.index - b.index);
@@ -1033,18 +1070,12 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   // src/settings/artist-sort.js
   var ARTIST_SORT_SETTINGS_KEY = "ncm-playlist-sort:artist-sort-config";
   var DEFAULT_ARTIST_SORT_SETTINGS = Object.freeze({
-    ...DEFAULT_ARTIST_SORT_CONFIG,
-    useTitleSortConfig: true,
-    customTextConfig: DEFAULT_TITLE_SORT_CONFIG
+    ...DEFAULT_ARTIST_SORT_CONFIG
   });
   function normalizeArtistSortSettings(settings = DEFAULT_ARTIST_SORT_SETTINGS) {
     const source = settings && typeof settings === "object" ? settings : DEFAULT_ARTIST_SORT_SETTINGS;
     const artistConfig = normalizeArtistSortConfig(source);
-    return {
-      ...artistConfig,
-      useTitleSortConfig: source.useTitleSortConfig !== false,
-      customTextConfig: normalizeTitleSortConfig(source.customTextConfig)
-    };
+    return artistConfig;
   }
   async function loadArtistSortSettings() {
     try {
@@ -1095,6 +1126,52 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       console.warn("[NCM-SORT] \u4FDD\u5B58\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
       return false;
     }
+  }
+
+  // src/sort/heat.js
+  var HEAT_SORT_METRICS = Object.freeze([
+    { id: "redCount", label: "\u7EA2\u5FC3\u6570\u91CF" },
+    { id: "popularity", label: "\u70ED\u5EA6\u503C" },
+    { id: "commentCount", label: "\u8BC4\u8BBA\u6570\u91CF" }
+  ]);
+  var HEAT_SORT_METRIC_IDS = new Set(HEAT_SORT_METRICS.map((metric) => metric.id));
+  var DEFAULT_HEAT_SORT_CONFIG = Object.freeze({
+    metric: "popularity",
+    descending: true
+  });
+  function normalizeHeatSortConfig(config = DEFAULT_HEAT_SORT_CONFIG) {
+    const source = config && typeof config === "object" ? config : DEFAULT_HEAT_SORT_CONFIG;
+    return {
+      metric: HEAT_SORT_METRIC_IDS.has(source.metric) ? source.metric : DEFAULT_HEAT_SORT_CONFIG.metric,
+      descending: source.descending !== false
+    };
+  }
+  function getMetricValue(item, metric) {
+    if (item?.[metric] === null || item?.[metric] === void 0 || item?.[metric] === "") {
+      return null;
+    }
+    const value = Number(item?.[metric]);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  function cmpByHeat(config = DEFAULT_HEAT_SORT_CONFIG) {
+    const normalizedConfig = normalizeHeatSortConfig(config);
+    return (a, b) => {
+      const valueA = getMetricValue(a, normalizedConfig.metric);
+      const valueB = getMetricValue(b, normalizedConfig.metric);
+      const knownA = valueA !== null;
+      const knownB = valueB !== null;
+      if (knownA !== knownB) return knownA ? -1 : 1;
+      if (!knownA) return 0;
+      if (valueA === valueB) return 0;
+      return normalizedConfig.descending ? valueB - valueA : valueA - valueB;
+    };
+  }
+  function sortSongsByHeat(items, config = DEFAULT_HEAT_SORT_CONFIG) {
+    const compare = cmpByHeat(config);
+    return items.map((item, index) => ({
+      item,
+      index: getOriginalIndex(item, index)
+    })).sort((a, b) => compare(a.item, b.item) || a.index - b.index).map(({ item }) => item);
   }
 
   // src/ui/dialogs.js
@@ -1162,6 +1239,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       sortAlbumTracks: document.getElementById("date-sort-tracks").checked
     };
   }
+  function readHeatSortConfig() {
+    const selected = document.querySelector("[data-heat-sort].is-selected");
+    return {
+      metric: selected?.dataset.metric || HEAT_SORT_METRICS[0].id,
+      descending: selected?.dataset.descending !== "false"
+    };
+  }
   function setDateTrackSortDisabled(disabled) {
     const input = document.getElementById("date-sort-tracks");
     const row = document.getElementById("date-sort-tracks-row");
@@ -1173,14 +1257,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     return {
       sortArtistsByName: document.getElementById("artist-sort-name").checked,
       sortSameArtistByDate: document.getElementById("artist-sort-date").checked,
-      useTitleSortConfig: document.getElementById("artist-text-source").value === "title",
-      customTextConfig: readTextSortConfig("artist")
+      textSortConfig: readTextSortConfig("artist")
     };
-  }
-  function setArtistTextConfigDisabled(disabled) {
-    const fieldset = document.getElementById("artist-text-settings");
-    fieldset.disabled = disabled;
-    fieldset.classList.toggle("is-disabled", disabled);
   }
   async function showTitleSortDialog(categoryIds) {
     const savedConfig = await loadTitleSortConfig();
@@ -1316,36 +1394,24 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
   async function showArtistSortDialog(categoryIds, savedSettings) {
     const artistConfig = savedSettings || await loadArtistSortSettings();
-    const titleConfig = await loadTitleSortConfig();
+    const textConfig = await loadTitleSortConfig();
     const dateConfig = await loadDateSortSettings();
-    const customTextConfig = artistConfig.customTextConfig;
     const visibleCategories = getVisibleTitleCategories(categoryIds);
-    const categories = orderTitleCategories(
-      visibleCategories,
-      artistConfig.useTitleSortConfig ? titleConfig.categoryOrder : customTextConfig.categoryOrder
-    );
-    const customCategories = orderTitleCategories(visibleCategories, customTextConfig.categoryOrder);
+    const categories = orderTitleCategories(visibleCategories, textConfig.categoryOrder);
     const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
       title: "\u6309\u6B4C\u624B\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
         <p>\u9009\u62E9\u6B4C\u624B\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
-        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u6BD4\u8F83\u3002\u6587\u5B57\u89C4\u5219\u53EF\u4EE5\u8DDF\u968F\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5355\u72EC\u8BBE\u7F6E\u3002</p>
+        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u6BD4\u8F83\uFF0C\u4E0B\u9762\u7684\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6807\u9898\u6392\u5E8F\u201D\u5171\u4EAB\u3002</p>
         <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
       </div>
-      <label class="ncm-sort-select-row">
-        <span class="ncm-sort-label">\u6B4C\u624B\u540D\u79F0\u89C4\u5219\uFF1A</span>
-        <select id="artist-text-source" class="ncm-sort-select">
-          <option value="title" ${artistConfig.useTitleSortConfig ? "selected" : ""}>\u8DDF\u968F\u6807\u9898\u6392\u5E8F\u89C4\u5219</option>
-          <option value="custom" ${artistConfig.useTitleSortConfig ? "" : "selected"}>\u4F7F\u7528\u6B4C\u624B\u4E13\u7528\u89C4\u5219</option>
-        </select>
-      </label>
-      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel ${artistConfig.useTitleSortConfig ? "is-disabled" : ""}" ${artistConfig.useTitleSortConfig ? "disabled" : ""}>
-        <legend>\u6B4C\u624B\u4E13\u7528\u6587\u5B57\u89C4\u5219</legend>
-        <p class="ncm-sort-help">\u4EC5\u5728\u9009\u62E9\u201C\u4F7F\u7528\u6B4C\u624B\u4E13\u7528\u89C4\u5219\u201D\u65F6\u751F\u6548\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002</p>
+      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel">
+        <legend>\u6587\u5B57\u6BD4\u8F83\u89C4\u5219\uFF08\u4E0E\u6807\u9898\u6392\u5E8F\u5171\u4EAB\uFF09</legend>
+        <p class="ncm-sort-help">\u4FEE\u6539\u5E76\u786E\u8BA4\u540E\uFF0C\u6807\u9898\u6392\u5E8F\u548C\u6B4C\u624B\u6392\u5E8F\u90FD\u4F1A\u4F7F\u7528\u8FD9\u5957\u89C4\u5219\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002</p>
         <label class="ncm-sort-switch-row">
-          <input id="artist-direct-compare" type="checkbox" ${customTextConfig.directStringCompare ? "checked" : ""}>
+          <input id="artist-direct-compare" type="checkbox" ${textConfig.directStringCompare ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">\u4F7F\u7528\u76F4\u63A5\u5B57\u7B26\u4E32\u6BD4\u8F83</span>
@@ -1355,13 +1421,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         <fieldset id="artist-category-priority" class="ncm-sort-priority-panel">
           <legend>\u6587\u5B57\u4F53\u7CFB\u4F18\u5148\u7EA7</legend>
           <ol id="artist-priority-list" class="ncm-sort-priority-list">
-            ${createTitleCategoryList(customCategories)}
+            ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
             <span class="ncm-sort-label">\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\uFF1A</span>
             <select id="artist-chinese-sort" class="ncm-sort-select">
               ${TITLE_CHINESE_SORTS.map((sort) => `
-                <option value="${sort.id}" ${sort.id === customTextConfig.chineseSort ? "selected" : ""}>
+                <option value="${sort.id}" ${sort.id === textConfig.chineseSort ? "selected" : ""}>
                   ${sort.label}
                 </option>
               `).join("")}
@@ -1395,12 +1461,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       cancelButtonText: "\u53D6\u6D88",
       customClass: swalClasses,
       didOpen: () => {
-        const textSource = document.getElementById("artist-text-source");
         const directCompare = document.getElementById("artist-direct-compare");
         const list = document.getElementById("artist-priority-list");
-        textSource.addEventListener("change", () => {
-          setArtistTextConfigDisabled(textSource.value === "title");
-        });
         directCompare.addEventListener("change", () => {
           setPriorityDisabled(directCompare.checked, "artist");
         });
@@ -1418,9 +1480,71 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           refreshPriorityIndexes(list);
         });
         setPriorityDisabled(directCompare.checked, "artist");
-        setArtistTextConfigDisabled(textSource.value === "title");
       },
       preConfirm: () => readArtistSortConfig()
+    });
+  }
+  function showHeatSortDialog(savedConfig) {
+    const config = normalizeHeatSortConfig(savedConfig);
+    const options = HEAT_SORT_METRICS.flatMap((metric) => [
+      {
+        metric: metric.id,
+        descending: true,
+        label: `${metric.label}\uFF1A${metric.id === "commentCount" ? "\u591A\u5230\u5C11" : "\u9AD8\u5230\u4F4E"}`
+      },
+      {
+        metric: metric.id,
+        descending: false,
+        label: `${metric.label}\uFF1A${metric.id === "commentCount" ? "\u5C11\u5230\u591A" : "\u4F4E\u5230\u9AD8"}`
+      }
+    ]);
+    return Swal.fire({
+      title: "\u6309\u70ED\u5EA6\u6392\u5E8F",
+      html: `
+      <div class="ncm-sort-intro">
+        <p>\u9009\u62E9\u70ED\u5EA6\u6307\u6807\u548C\u6392\u5E8F\u65B9\u5411\uFF1A</p>
+        <p class="ncm-sort-help">\u7EA2\u5FC3\u6570\u91CF\u6765\u81EA\u7F51\u6613\u4E91\u7EA2\u5FC3\u63A5\u53E3\uFF0C\u70ED\u5EA6\u503C\u6765\u81EA\u6B4C\u66F2\u8BE6\u60C5\uFF0C\u8BC4\u8BBA\u6570\u91CF\u4F7F\u7528\u6279\u91CF\u63A5\u53E3\u3002</p>
+      </div>
+      <div class="ncm-sort-choice-list">
+        ${options.map((option) => {
+        const selected = option.metric === config.metric && option.descending === config.descending;
+        return `<button type="button" class="ncm-sort-choice-button ${selected ? "is-selected" : ""}" data-heat-sort data-metric="${option.metric}" data-descending="${option.descending}" aria-pressed="${selected}">${option.label}</button>`;
+      }).join("")}
+      </div>
+    `,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u5F00\u59CB\u6392\u5E8F",
+      cancelButtonText: "\u53D6\u6D88",
+      customClass: swalClasses,
+      didOpen: () => {
+        const buttons = [...document.querySelectorAll("[data-heat-sort]")];
+        buttons.forEach((button) => {
+          button.addEventListener("click", () => {
+            buttons.forEach((item) => {
+              const selected = item === button;
+              item.classList.toggle("is-selected", selected);
+              item.setAttribute("aria-pressed", String(selected));
+            });
+          });
+        });
+      },
+      preConfirm: () => readHeatSortConfig()
+    });
+  }
+  function showRestoreOrderDialog(backup) {
+    const createdAt = backup.createdAt ? new Date(backup.createdAt).toLocaleString() : "\u672A\u77E5\u65F6\u95F4";
+    return Swal.fire({
+      icon: "warning",
+      title: "\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\uFF1F",
+      text: `${backup.playlistName || "\u5F53\u524D\u6B4C\u5355"}
+\u5907\u4EFD\u65F6\u95F4\uFF1A${createdAt}
+\u5171 ${backup.songIds.length} \u9996\u6B4C\u66F2`,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u6062\u590D\u987A\u5E8F",
+      cancelButtonText: "\u53D6\u6D88",
+      customClass: dangerSwalClasses
     });
   }
   function showBatchMoveDialog() {
@@ -1537,17 +1661,64 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     });
   }
 
+  // src/settings/order-backup.js
+  var ORDER_BACKUP_KEY = "ncm-playlist-sort:last-order-backup";
+  function normalizeBackup(backup) {
+    if (!backup || typeof backup !== "object") return null;
+    if (backup.pid === null || backup.pid === void 0) return null;
+    if (!Array.isArray(backup.songIds) || !backup.songIds.length) return null;
+    return {
+      pid: String(backup.pid),
+      playlistName: typeof backup.playlistName === "string" ? backup.playlistName : "",
+      songIds: backup.songIds.map((id) => String(id)),
+      createdAt: Number.isFinite(backup.createdAt) ? backup.createdAt : 0
+    };
+  }
+  async function loadOrderBackup() {
+    try {
+      const stored = await Promise.resolve(readStoredValue(ORDER_BACKUP_KEY));
+      return normalizeBackup(stored);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u6392\u5E8F\u5907\u4EFD\u5931\u8D25", error);
+      return null;
+    }
+  }
+  async function saveOrderBackup(pid, songIds, playlistName = "") {
+    const backup = normalizeBackup({
+      pid,
+      playlistName,
+      songIds,
+      createdAt: Date.now()
+    });
+    if (!backup) return false;
+    try {
+      return await Promise.resolve(writeStoredValue(ORDER_BACKUP_KEY, backup));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u6392\u5E8F\u5907\u4EFD\u5931\u8D25", error);
+      return false;
+    }
+  }
+  async function clearOrderBackup() {
+    try {
+      return await Promise.resolve(writeStoredValue(ORDER_BACKUP_KEY, null));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u6E05\u9664\u6392\u5E8F\u5907\u4EFD\u5931\u8D25", error);
+      return false;
+    }
+  }
+
   // src/operations/sort-by-title.js
   async function sortByTitle(pid) {
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2\u5E76\u8BC6\u522B\u6587\u5B57\u4F53\u7CFB...");
-    const { playlist, items } = await getAllSongs(pid);
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
     const categoryIds = detectTitleCategoryIds(items);
     const settings = await showTitleSortDialog(categoryIds);
     if (!settings.isConfirmed) return;
     await saveTitleSortConfig(settings.value);
-    if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) return;
+    if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF0C\u6392\u5E8F\u540E\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u3002\u7EE7\u7EED\uFF1F")) return;
     showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
     const ordered = items.slice().sort(createTitleComparator(settings.value)).map((x) => x.id);
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
     const res = await updatePlaylistOrder(pid, ordered);
     if (res && res.code === 200) {
@@ -1556,7 +1727,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         title: "\u6392\u5E8F\u5B8C\u6210",
         text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
         customClass: swalClasses
       });
     } else {
@@ -1605,10 +1776,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   async function performDateSort(pid, descending, dateSortConfig) {
     try {
       showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-      const { playlist, items } = await getAllSongs(pid);
+      const { playlist, items, originalSongIds } = await getAllSongs(pid);
       await ensurePublishTimes(items);
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
       const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map((x) => x.id);
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
       if (res && res.code === 200) {
@@ -1618,7 +1790,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
 \u6309\u53D1\u884C\u65E5\u671F${descending ? "\u5012\u5E8F" : "\u987A\u5E8F"}\u6392\u5217
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
           customClass: swalClasses
         });
       } else {
@@ -1644,26 +1816,26 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   async function sortByArtist(pid) {
     const artistSettings = await loadArtistSortSettings();
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-    const { playlist, items } = await getAllSongs(pid);
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
     const categoryIds = detectTextCategoryIds(items.map((item) => item.artist || ""));
     const result = await showArtistSortDialog(categoryIds, artistSettings);
     if (!result.isConfirmed) return;
     try {
+      await saveTitleSortConfig(result.value.textSortConfig);
       await saveArtistSortSettings(result.value);
       if (result.value.sortSameArtistByDate) {
         await ensurePublishTimes(items);
       }
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-      const titleSortConfig = await loadTitleSortConfig();
       const dateSortConfig = await loadDateSortSettings();
-      const textSortConfig = result.value.useTitleSortConfig ? titleSortConfig : result.value.customTextConfig;
       const orderedItems = sortSongsByArtist(
         items,
         result.value,
-        textSortConfig,
+        result.value.textSortConfig,
         dateSortConfig
       );
       const ordered = orderedItems.map((item) => item.id);
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
       if (res && res.code === 200) {
@@ -1673,7 +1845,162 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
 \u6309\u6B4C\u624B${result.value.sortSameArtistByDate ? `\u53CA\u53D1\u884C\u65E5\u671F\uFF08${dateSortConfig.descending ? "\u4ECE\u65B0\u5230\u65E7" : "\u4ECE\u65E7\u5230\u65B0"}\uFF09` : ""}\u6392\u5217
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+          customClass: swalClasses
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "\u6392\u5E8F\u5931\u8D25",
+          text: JSON.stringify(res),
+          customClass: swalClasses
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      Swal.fire({
+        icon: "error",
+        title: "\u51FA\u9519",
+        text: e?.message || String(e),
+        customClass: swalClasses
+      });
+    }
+  }
+
+  // src/data/heat.js
+  var redCountCache = /* @__PURE__ */ new Map();
+  var commentCountCache = /* @__PURE__ */ new Map();
+  function isMissing(value) {
+    return value === null || value === void 0;
+  }
+  async function ensureRedCounts(items) {
+    const needFetch = items.filter((item) => isMissing(item.redCount));
+    let failed = 0;
+    for (let i = 0; i < needFetch.length; i++) {
+      const item = needFetch[i];
+      if (redCountCache.has(item.id)) {
+        item.redCount = redCountCache.get(item.id);
+        continue;
+      }
+      try {
+        const result = await fetchSongRedCount(item.id);
+        const count = Number(result?.data?.count);
+        if (result?.code === 200 && Number.isFinite(count) && count >= 0) {
+          item.redCount = count;
+          redCountCache.set(item.id, count);
+        } else {
+          failed++;
+        }
+      } catch (error) {
+        failed++;
+        console.error(`\u83B7\u53D6\u6B4C\u66F2 ${item.id} \u7EA2\u5FC3\u6570\u5931\u8D25:`, error);
+      }
+      if ((i + 1) % 10 === 0) {
+        showToast(`\u83B7\u53D6\u7EA2\u5FC3\u6570\u8FDB\u5EA6: ${i + 1}/${needFetch.length}`);
+      }
+      await sleep(100);
+    }
+    return { failed, requested: needFetch.length };
+  }
+  async function ensureCommentCounts(items) {
+    const needFetch = items.filter((item) => isMissing(item.commentCount));
+    let failed = 0;
+    for (let start = 0; start < needFetch.length; start += 1e3) {
+      const batch = needFetch.slice(start, start + 1e3);
+      const uncached = batch.filter((item) => !commentCountCache.has(item.id));
+      for (const item of batch) {
+        if (commentCountCache.has(item.id)) {
+          item.commentCount = commentCountCache.get(item.id);
+        }
+      }
+      if (!uncached.length) continue;
+      try {
+        const result = await fetchSongCommentCounts(uncached.map((item) => item.id));
+        if (result?.code !== 200 || !Array.isArray(result.data)) {
+          failed += uncached.length;
+        } else {
+          const counts = /* @__PURE__ */ new Map();
+          for (const entry of result.data) {
+            const count = Number(entry.commentCount);
+            if (Number.isFinite(count) && count >= 0) {
+              counts.set(String(entry.resourceId), count);
+            }
+          }
+          for (const item of uncached) {
+            const count = counts.get(String(item.id));
+            if (count === void 0) {
+              failed++;
+            } else {
+              item.commentCount = count;
+              commentCountCache.set(item.id, count);
+            }
+          }
+        }
+      } catch (error) {
+        failed += uncached.length;
+        console.error(`\u83B7\u53D6\u6B4C\u66F2\u8BC4\u8BBA\u6570\u5931\u8D25\uFF08${uncached.length} \u9996\uFF09:`, error);
+      }
+      showToast(`\u83B7\u53D6\u8BC4\u8BBA\u6570\u8FDB\u5EA6: ${Math.min(start + batch.length, needFetch.length)}/${needFetch.length}`);
+      await sleep(100);
+    }
+    return { failed, requested: needFetch.length };
+  }
+  async function ensureHeatMetric(items, metric) {
+    if (metric === "redCount") return ensureRedCounts(items);
+    if (metric === "commentCount") return ensureCommentCounts(items);
+    return { failed: 0, requested: 0 };
+  }
+
+  // src/settings/heat-sort.js
+  var HEAT_SORT_SETTINGS_KEY = "ncm-playlist-sort:heat-sort-config";
+  async function loadHeatSortConfig() {
+    try {
+      const stored = await Promise.resolve(readStoredValue(HEAT_SORT_SETTINGS_KEY));
+      return normalizeHeatSortConfig(stored);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u70ED\u5EA6\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u8BBE\u7F6E", error);
+      return normalizeHeatSortConfig(DEFAULT_HEAT_SORT_CONFIG);
+    }
+  }
+  async function saveHeatSortConfig(config) {
+    const normalized = normalizeHeatSortConfig(config);
+    try {
+      return await Promise.resolve(writeStoredValue(HEAT_SORT_SETTINGS_KEY, normalized));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u70ED\u5EA6\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
+      return false;
+    }
+  }
+
+  // src/operations/sort-by-heat.js
+  async function sortByHeat(pid) {
+    const savedConfig = await loadHeatSortConfig();
+    const result = await showHeatSortDialog(savedConfig);
+    if (!result.isConfirmed) return;
+    try {
+      await saveHeatSortConfig(result.value);
+      showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+      const { playlist, items, originalSongIds } = await getAllSongs(pid);
+      let failed = 0;
+      const summary = await ensureHeatMetric(items, result.value.metric);
+      failed = summary.failed;
+      showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
+      const ordered = sortSongsByHeat(items, result.value).map((item) => item.id);
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name);
+      showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+      const res = await updatePlaylistOrder(pid, ordered);
+      if (res && res.code === 200) {
+        const metricLabel = HEAT_SORT_METRICS.find((metric) => metric.id === result.value.metric)?.label || "\u70ED\u5EA6\u6307\u6807";
+        const directionLabel = result.value.descending ? "\u964D\u5E8F" : "\u5347\u5E8F";
+        const failureText = failed ? `
+${failed} \u9996\u6B4C\u66F2\u7684${metricLabel}\u83B7\u53D6\u5931\u8D25\uFF0C\u5DF2\u6392\u5728\u672B\u5C3E` : "";
+        Swal.fire({
+          icon: "success",
+          title: "\u6392\u5E8F\u5B8C\u6210",
+          text: `${playlist.name}
+\u5171 ${ordered.length} \u9996
+\u6309${metricLabel}${directionLabel}\u6392\u5217${failureText}
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
           customClass: swalClasses
         });
       } else {
@@ -1793,8 +2120,89 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
   }
 
+  // src/operations/restore-order.js
+  function countIds(ids) {
+    const counts = /* @__PURE__ */ new Map();
+    for (const id of ids) {
+      const key = String(id);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    return counts;
+  }
+  function sameSongSet(currentIds, backupIds) {
+    if (currentIds.length !== backupIds.length) return false;
+    const currentCounts = countIds(currentIds);
+    const backupCounts = countIds(backupIds);
+    if (currentCounts.size !== backupCounts.size) return false;
+    for (const [id, count] of currentCounts) {
+      if (backupCounts.get(id) !== count) return false;
+    }
+    return true;
+  }
+  async function restoreLastOrder(pid) {
+    const backup = await loadOrderBackup();
+    if (!backup || backup.pid !== String(pid)) {
+      Swal.fire({
+        icon: "info",
+        title: "\u6CA1\u6709\u53EF\u6062\u590D\u7684\u987A\u5E8F",
+        text: "\u5F53\u524D\u6B4C\u5355\u8FD8\u6CA1\u6709\u6210\u529F\u6392\u5E8F\u8FC7\uFF0C\u6216\u5907\u4EFD\u5C5E\u4E8E\u5176\u4ED6\u6B4C\u5355\u3002",
+        customClass: swalClasses
+      });
+      return;
+    }
+    const confirmation = await showRestoreOrderDialog(backup);
+    if (!confirmation.isConfirmed) return;
+    try {
+      showToast("\u6B63\u5728\u68C0\u67E5\u5F53\u524D\u6B4C\u5355\u662F\u5426\u4ECD\u53EF\u6062\u590D...");
+      const detail = await fetchPlaylistDetail(pid);
+      if (!detail || detail.code !== 200) {
+        throw new Error("playlist/detail failed: " + JSON.stringify(detail));
+      }
+      const currentIds = getPlaylistTrackIds(detail.playlist);
+      if (!sameSongSet(currentIds, backup.songIds)) {
+        Swal.fire({
+          icon: "warning",
+          title: "\u65E0\u6CD5\u5B89\u5168\u6062\u590D",
+          text: "\u5F53\u524D\u6B4C\u5355\u7684\u6B4C\u66F2\u6570\u91CF\u6216\u5185\u5BB9\u5DF2\u7ECF\u53D8\u5316\uFF0C\u5907\u4EFD\u4ECD\u4F1A\u4FDD\u7559\u3002",
+          customClass: swalClasses
+        });
+        return;
+      }
+      showToast("\u6B63\u5728\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u5355\u987A\u5E8F...");
+      const result = await updatePlaylistOrder(pid, backup.songIds);
+      if (!result || result.code !== 200) {
+        Swal.fire({
+          icon: "error",
+          title: "\u6062\u590D\u5931\u8D25",
+          text: JSON.stringify(result),
+          customClass: swalClasses
+        });
+        return;
+      }
+      await clearOrderBackup();
+      Swal.fire({
+        icon: "success",
+        title: "\u6062\u590D\u5B8C\u6210",
+        text: `${backup.playlistName || "\u5F53\u524D\u6B4C\u5355"}
+\u5DF2\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u66F2\u987A\u5E8F
+\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        customClass: swalClasses
+      });
+    } catch (error) {
+      console.error(error);
+      Swal.fire({
+        icon: "error",
+        title: "\u6062\u590D\u51FA\u9519",
+        text: error?.message || String(error),
+        customClass: swalClasses
+      });
+    }
+  }
+
   // src/ui/menu.js
   async function showFunctionMenu(pid) {
+    const backup = await loadOrderBackup();
+    const canRestore = backup?.pid === String(pid);
     const result = await Swal.fire({
       title: "\u6B4C\u5355\u6392\u5E8F\u5DE5\u5177",
       html: `
@@ -1802,6 +2210,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         <button id="sort-by-title" class="ncm-sort-menu-button">\u6309\u6807\u9898\u6392\u5E8F</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
+        <button id="sort-by-heat" class="ncm-sort-menu-button">\u6309\u70ED\u5EA6\u6392\u5E8F</button>
+        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">\u6062\u590D\u4E0A\u6B21\u6392\u5E8F\u524D\u987A\u5E8F</button>' : ""}
         <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
       </div>
@@ -1852,6 +2262,36 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             });
           }
         });
+        document.getElementById("sort-by-heat").addEventListener("click", async () => {
+          Swal.close();
+          try {
+            await sortByHeat(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
+        if (canRestore) {
+          document.getElementById("restore-last-order").addEventListener("click", async () => {
+            Swal.close();
+            try {
+              await restoreLastOrder(pid);
+            } catch (e) {
+              console.error(e);
+              Swal.fire({
+                icon: "error",
+                title: "\u51FA\u9519",
+                text: e?.message || String(e),
+                customClass: swalClasses
+              });
+            }
+          });
+        }
         document.getElementById("batch-move").addEventListener("click", async () => {
           Swal.close();
           try {

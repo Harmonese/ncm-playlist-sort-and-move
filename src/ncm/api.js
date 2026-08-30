@@ -22,3 +22,12 @@ export const deleteSongsFromPlaylist = (pid, ids) =>
 
 export const fetchAlbumDetail = (albumId) =>
   weapiPost(`/api/v1/album/${albumId}`, {});
+
+export const fetchSongRedCount = (songId) =>
+  weapiPost('/api/song/red/count', { songId });
+
+export const fetchSongCommentCounts = (songIds) =>
+  weapiPost('/api/resource/commentInfo/list', {
+    resourceType: '4',
+    resourceIds: JSON.stringify(songIds)
+  });

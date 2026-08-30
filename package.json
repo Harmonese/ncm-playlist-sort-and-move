@@ -1,8 +1,8 @@
 {
   "name": "ncm-playlist-sort-and-move",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "private": true,
-  "description": "网易云音乐歌单排序与移动用户脚本",
+  "description": "网易云音乐歌单排序与移动用户脚本，支持标题、歌手、发行日期和热度排序",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",

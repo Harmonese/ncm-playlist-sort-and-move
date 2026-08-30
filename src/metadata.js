@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.5
-// @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
+// @version      0.6.0
+// @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
 // @homepageURL  https://github.com/Harmonese/ncm-playlist-sort-and-move

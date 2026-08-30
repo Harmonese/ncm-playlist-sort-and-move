@@ -1,8 +1,4 @@
 import {
-  DEFAULT_TITLE_SORT_CONFIG,
-  normalizeTitleSortConfig
-} from '../sort/title.js';
-import {
   DEFAULT_ARTIST_SORT_CONFIG,
   normalizeArtistSortConfig
 } from '../sort/artist.js';
@@ -11,9 +7,7 @@ import { readStoredValue, writeStoredValue } from './storage.js';
 export const ARTIST_SORT_SETTINGS_KEY = 'ncm-playlist-sort:artist-sort-config';
 
 export const DEFAULT_ARTIST_SORT_SETTINGS = Object.freeze({
-  ...DEFAULT_ARTIST_SORT_CONFIG,
-  useTitleSortConfig: true,
-  customTextConfig: DEFAULT_TITLE_SORT_CONFIG
+  ...DEFAULT_ARTIST_SORT_CONFIG
 });
 
 export function normalizeArtistSortSettings(settings = DEFAULT_ARTIST_SORT_SETTINGS) {
@@ -22,11 +16,7 @@ export function normalizeArtistSortSettings(settings = DEFAULT_ARTIST_SORT_SETTI
     : DEFAULT_ARTIST_SORT_SETTINGS;
   const artistConfig = normalizeArtistSortConfig(source);
 
-  return {
-    ...artistConfig,
-    useTitleSortConfig: source.useTitleSortConfig !== false,
-    customTextConfig: normalizeTitleSortConfig(source.customTextConfig)
-  };
+  return artistConfig;
 }
 
 export async function loadArtistSortSettings() {

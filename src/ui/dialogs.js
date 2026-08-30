@@ -6,6 +6,7 @@ import {
 import { loadTitleSortConfig } from '../settings/title-sort.js';
 import { loadArtistSortSettings } from '../settings/artist-sort.js';
 import { loadDateSortSettings } from '../settings/date-sort.js';
+import { HEAT_SORT_METRICS, normalizeHeatSortConfig } from '../sort/heat.js';
 
 function getVisibleTitleCategories(categoryIds) {
   const requestedIds = Array.isArray(categoryIds)
@@ -89,6 +90,15 @@ function readDateSortConfig() {
   };
 }
 
+function readHeatSortConfig() {
+  const selected = document.querySelector('[data-heat-sort].is-selected');
+
+  return {
+    metric: selected?.dataset.metric || HEAT_SORT_METRICS[0].id,
+    descending: selected?.dataset.descending !== 'false'
+  };
+}
+
 function setDateTrackSortDisabled(disabled) {
   const input = document.getElementById('date-sort-tracks');
   const row = document.getElementById('date-sort-tracks-row');
@@ -101,15 +111,8 @@ function readArtistSortConfig() {
   return {
     sortArtistsByName: document.getElementById('artist-sort-name').checked,
     sortSameArtistByDate: document.getElementById('artist-sort-date').checked,
-    useTitleSortConfig: document.getElementById('artist-text-source').value === 'title',
-    customTextConfig: readTextSortConfig('artist')
+    textSortConfig: readTextSortConfig('artist')
   };
-}
-
-function setArtistTextConfigDisabled(disabled) {
-  const fieldset = document.getElementById('artist-text-settings');
-  fieldset.disabled = disabled;
-  fieldset.classList.toggle('is-disabled', disabled);
 }
 
 export async function showTitleSortDialog(categoryIds) {
@@ -261,17 +264,10 @@ export async function showDateSortDialog() {
 
 export async function showArtistSortDialog(categoryIds, savedSettings) {
   const artistConfig = savedSettings || await loadArtistSortSettings();
-  const titleConfig = await loadTitleSortConfig();
+  const textConfig = await loadTitleSortConfig();
   const dateConfig = await loadDateSortSettings();
-  const customTextConfig = artistConfig.customTextConfig;
   const visibleCategories = getVisibleTitleCategories(categoryIds);
-  const categories = orderTitleCategories(
-    visibleCategories,
-    artistConfig.useTitleSortConfig
-      ? titleConfig.categoryOrder
-      : customTextConfig.categoryOrder
-  );
-  const customCategories = orderTitleCategories(visibleCategories, customTextConfig.categoryOrder);
+  const categories = orderTitleCategories(visibleCategories, textConfig.categoryOrder);
   const categoryNames = categories.map(category => category.label).join('、');
 
   return Swal.fire({
@@ -279,21 +275,14 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
     html: `
       <div class="ncm-sort-intro">
         <p>选择歌手排序方式：</p>
-        <p class="ncm-sort-help">歌手名称会从左到右比较。文字规则可以跟随标题，也可以单独设置。</p>
+        <p class="ncm-sort-help">歌手名称会从左到右比较，下面的文字规则与“按标题排序”共享。</p>
         <p class="ncm-sort-detected">当前歌单：${categories.length} 类（${categoryNames}）</p>
       </div>
-      <label class="ncm-sort-select-row">
-        <span class="ncm-sort-label">歌手名称规则：</span>
-        <select id="artist-text-source" class="ncm-sort-select">
-          <option value="title" ${artistConfig.useTitleSortConfig ? 'selected' : ''}>跟随标题排序规则</option>
-          <option value="custom" ${artistConfig.useTitleSortConfig ? '' : 'selected'}>使用歌手专用规则</option>
-        </select>
-      </label>
-      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel ${artistConfig.useTitleSortConfig ? 'is-disabled' : ''}" ${artistConfig.useTitleSortConfig ? 'disabled' : ''}>
-        <legend>歌手专用文字规则</legend>
-        <p class="ncm-sort-help">仅在选择“使用歌手专用规则”时生效。越靠上优先级越高。</p>
+      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel">
+        <legend>文字比较规则（与标题排序共享）</legend>
+        <p class="ncm-sort-help">修改并确认后，标题排序和歌手排序都会使用这套规则。越靠上优先级越高。</p>
         <label class="ncm-sort-switch-row">
-          <input id="artist-direct-compare" type="checkbox" ${customTextConfig.directStringCompare ? 'checked' : ''}>
+          <input id="artist-direct-compare" type="checkbox" ${textConfig.directStringCompare ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">使用直接字符串比较</span>
@@ -303,13 +292,13 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
         <fieldset id="artist-category-priority" class="ncm-sort-priority-panel">
           <legend>文字体系优先级</legend>
           <ol id="artist-priority-list" class="ncm-sort-priority-list">
-            ${createTitleCategoryList(customCategories)}
+            ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
             <span class="ncm-sort-label">汉字排序方式：</span>
             <select id="artist-chinese-sort" class="ncm-sort-select">
               ${TITLE_CHINESE_SORTS.map(sort => `
-                <option value="${sort.id}" ${sort.id === customTextConfig.chineseSort ? 'selected' : ''}>
+                <option value="${sort.id}" ${sort.id === textConfig.chineseSort ? 'selected' : ''}>
                   ${sort.label}
                 </option>
               `).join('')}
@@ -343,13 +332,8 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
     cancelButtonText: '取消',
     customClass: swalClasses,
     didOpen: () => {
-      const textSource = document.getElementById('artist-text-source');
       const directCompare = document.getElementById('artist-direct-compare');
       const list = document.getElementById('artist-priority-list');
-
-      textSource.addEventListener('change', () => {
-        setArtistTextConfigDisabled(textSource.value === 'title');
-      });
 
       directCompare.addEventListener('change', () => {
         setPriorityDisabled(directCompare.checked, 'artist');
@@ -374,9 +358,75 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
       });
 
       setPriorityDisabled(directCompare.checked, 'artist');
-      setArtistTextConfigDisabled(textSource.value === 'title');
     },
     preConfirm: () => readArtistSortConfig()
+  });
+}
+
+export function showHeatSortDialog(savedConfig) {
+  const config = normalizeHeatSortConfig(savedConfig);
+  const options = HEAT_SORT_METRICS.flatMap(metric => [
+    {
+      metric: metric.id,
+      descending: true,
+      label: `${metric.label}：${metric.id === 'commentCount' ? '多到少' : '高到低'}`
+    },
+    {
+      metric: metric.id,
+      descending: false,
+      label: `${metric.label}：${metric.id === 'commentCount' ? '少到多' : '低到高'}`
+    }
+  ]);
+
+  return Swal.fire({
+    title: '按热度排序',
+    html: `
+      <div class="ncm-sort-intro">
+        <p>选择热度指标和排序方向：</p>
+        <p class="ncm-sort-help">红心数量来自网易云红心接口，热度值来自歌曲详情，评论数量使用批量接口。</p>
+      </div>
+      <div class="ncm-sort-choice-list">
+        ${options.map(option => {
+          const selected = option.metric === config.metric && option.descending === config.descending;
+          return `<button type="button" class="ncm-sort-choice-button ${selected ? 'is-selected' : ''}" data-heat-sort data-metric="${option.metric}" data-descending="${option.descending}" aria-pressed="${selected}">${option.label}</button>`;
+        }).join('')}
+      </div>
+    `,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '开始排序',
+    cancelButtonText: '取消',
+    customClass: swalClasses,
+    didOpen: () => {
+      const buttons = [...document.querySelectorAll('[data-heat-sort]')];
+      buttons.forEach((button) => {
+        button.addEventListener('click', () => {
+          buttons.forEach((item) => {
+            const selected = item === button;
+            item.classList.toggle('is-selected', selected);
+            item.setAttribute('aria-pressed', String(selected));
+          });
+        });
+      });
+    },
+    preConfirm: () => readHeatSortConfig()
+  });
+}
+
+export function showRestoreOrderDialog(backup) {
+  const createdAt = backup.createdAt
+    ? new Date(backup.createdAt).toLocaleString()
+    : '未知时间';
+
+  return Swal.fire({
+    icon: 'warning',
+    title: '恢复排序前顺序？',
+    text: `${backup.playlistName || '当前歌单'}\n备份时间：${createdAt}\n共 ${backup.songIds.length} 首歌曲`,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '恢复顺序',
+    cancelButtonText: '取消',
+    customClass: dangerSwalClasses
   });
 }
 

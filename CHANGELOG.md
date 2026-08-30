@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-08-31
+
+### Added
+
+- Added heat sorting by red-heart count, song popularity, or comment count, each with ascending and descending modes.
+- Added persistent recovery of the last pre-sort playlist order.
+- Added explicit original playlist indexes for stable tie-breaking.
+
+### Changed
+
+- Unified title and artist sorting under one shared text-comparison configuration shown in both sorting dialogs.
+- Removed the separate artist-only text configuration to keep text ordering consistent across sorting modes.
+
 ## [0.5.5] - 2026-08-31
 
 ### Added

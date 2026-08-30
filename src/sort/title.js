@@ -1,3 +1,5 @@
+import { compareOriginalOrder } from './order.js';
+
 const collator = new Intl.Collator(undefined, {
   numeric: false,
   sensitivity: 'base',
@@ -231,7 +233,7 @@ export function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
     const albumResult = collator.compare(a.album || '', b.album || '');
     if (albumResult) return albumResult;
 
-    return a.id - b.id;
+    return compareOriginalOrder(a, b);
   };
 }
 

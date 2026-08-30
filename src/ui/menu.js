@@ -1,11 +1,16 @@
 import { sortByTitle } from '../operations/sort-by-title.js';
 import { sortByPublishDate } from '../operations/sort-by-date.js';
 import { sortByArtist } from '../operations/sort-by-artist.js';
+import { sortByHeat } from '../operations/sort-by-heat.js';
 import { batchMoveSongs } from '../operations/batch-move.js';
 import { batchDeleteSongs } from '../operations/batch-delete.js';
+import { restoreLastOrder } from '../operations/restore-order.js';
+import { loadOrderBackup } from '../settings/order-backup.js';
 import { swalClasses } from './styles.js';
 
 export async function showFunctionMenu(pid) {
+  const backup = await loadOrderBackup();
+  const canRestore = backup?.pid === String(pid);
   const result = await Swal.fire({
     title: '歌单排序工具',
     html: `
@@ -13,6 +18,8 @@ export async function showFunctionMenu(pid) {
         <button id="sort-by-title" class="ncm-sort-menu-button">按标题排序</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">按歌手排序</button>
+        <button id="sort-by-heat" class="ncm-sort-menu-button">按热度排序</button>
+        ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">恢复上次排序前顺序</button>' : ''}
         <button id="batch-move" class="ncm-sort-menu-button">批量移动歌曲</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">批量删除歌曲</button>
       </div>
@@ -65,6 +72,38 @@ export async function showFunctionMenu(pid) {
           });
         }
       });
+
+      document.getElementById('sort-by-heat').addEventListener('click', async () => {
+        Swal.close();
+        try {
+          await sortByHeat(pid);
+        } catch (e) {
+          console.error(e);
+          Swal.fire({
+            icon: 'error',
+            title: '出错',
+            text: e?.message || String(e),
+            customClass: swalClasses
+          });
+        }
+      });
+
+      if (canRestore) {
+        document.getElementById('restore-last-order').addEventListener('click', async () => {
+          Swal.close();
+          try {
+            await restoreLastOrder(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: 'error',
+              title: '出错',
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
+      }
 
       document.getElementById('batch-move').addEventListener('click', async () => {
         Swal.close();

@@ -1,5 +1,6 @@
 import { createTextComparator } from './title.js';
 import { cmpByDate } from './date.js';
+import { getOriginalIndex } from './order.js';
 
 export const DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
   sortArtistsByName: true,
@@ -29,14 +30,15 @@ export function sortSongsByArtist(items, config, textSortConfig, dateSortConfig)
   const groupsByArtist = new Map();
 
   items.forEach((item, index) => {
+    const originalIndex = getOriginalIndex(item, index);
     const artist = item.artist || '';
     let group = groupsByArtist.get(artist);
     if (!group) {
-      group = { artist, index, items: [] };
+      group = { artist, index: originalIndex, items: [] };
       groupsByArtist.set(artist, group);
       groups.push(group);
     }
-    group.items.push({ item, index });
+    group.items.push({ item, index: originalIndex });
   });
 
   if (normalizedConfig.sortArtistsByName) {
