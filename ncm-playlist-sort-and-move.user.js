@@ -333,12 +333,16 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (lengthResult) return lengthResult;
     return compareUnicodeStrings(titleA, titleB);
   }
-  function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
+  function createTextComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
     const normalizedConfig = normalizeTitleSortConfig(config);
+    return (textA = "", textB = "") => compareTitles(textA, textB, normalizedConfig);
+  }
+  function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
+    const compareText = createTextComparator(config);
     return (a, b) => {
       const titleA = a.title || "";
       const titleB = b.title || "";
-      const titleResult = compareTitles(titleA, titleB, normalizedConfig);
+      const titleResult = compareText(titleA, titleB);
       if (titleResult) return titleResult;
       const artistResult = collator.compare(a.artist || "", b.artist || "");
       if (artistResult) return artistResult;
@@ -538,6 +542,17 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       color: #205e58 !important;
     }
 
+    .ncm-sort-choice-button.is-selected {
+      border-color: #5c9a93 !important;
+      background: #e5f2f0 !important;
+      color: #205e58 !important;
+      box-shadow: inset 3px 0 0 #2f7d75 !important;
+    }
+
+    .ncm-sort-choice-button:disabled {
+      cursor: not-allowed;
+    }
+
     .ncm-sort-menu-button-danger {
       border-color: #efd0d0 !important;
       background: #fff7f7 !important;
@@ -586,6 +601,18 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       border-radius: 8px;
       background: #fbfcfc;
       text-align: left;
+    }
+
+    .ncm-sort-date-order {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 18px;
+      text-align: left;
+      transition: opacity 0.15s ease;
+    }
+
+    .ncm-sort-date-order.is-disabled {
+      opacity: 0.48;
     }
 
     .ncm-sort-switch-row input {
@@ -955,7 +982,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     fieldset.classList.toggle("is-disabled", disabled);
   }
   function readDateSortConfig() {
+    const selectedOrder = document.querySelector("[data-date-order].is-selected");
     return {
+      descending: selectedOrder?.dataset.descending !== "false",
       sortAlbumsByName: document.getElementById("date-sort-albums").checked,
       sortAlbumTracks: document.getElementById("date-sort-tracks").checked
     };
@@ -966,6 +995,30 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     input.disabled = disabled;
     if (disabled) input.checked = false;
     row.classList.toggle("is-disabled", disabled);
+  }
+  function readArtistSortConfig() {
+    const selectedOrder = document.querySelector("[data-artist-date-order].is-selected");
+    return {
+      sortArtistsByName: document.getElementById("artist-sort-name").checked,
+      sortSameArtistByDate: document.getElementById("artist-sort-date").checked,
+      descending: selectedOrder?.dataset.descending !== "false"
+    };
+  }
+  function setArtistDateOrderDisabled(disabled) {
+    const container = document.getElementById("artist-date-order-settings");
+    const buttons = [...document.querySelectorAll("[data-artist-date-order]")];
+    buttons.forEach((button) => {
+      button.disabled = disabled;
+    });
+    container.classList.toggle("is-disabled", disabled);
+  }
+  function setArtistDateSortDisabled(disabled) {
+    const input = document.getElementById("artist-sort-date");
+    const row = document.getElementById("artist-sort-date-row");
+    input.disabled = disabled;
+    if (disabled) input.checked = false;
+    row.classList.toggle("is-disabled", disabled);
+    setArtistDateOrderDisabled(disabled || !input.checked);
   }
   async function showTitleSortDialog(categoryIds) {
     const savedConfig = await loadTitleSortConfig();
@@ -1040,13 +1093,19 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       preConfirm: () => readTitleSortConfig()
     });
   }
-  async function showDateSortDialog(pid, performDateSort2) {
-    const result = await Swal.fire({
+  function showDateSortDialog() {
+    return Swal.fire({
       title: "\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
-        <p>\u9009\u62E9\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
+        <p>\u9009\u62E9\u6392\u5E8F\u65B9\u5411\uFF1A</p>
         <p class="ncm-sort-help">\u53D1\u884C\u65E5\u671F\u76F8\u540C\u65F6\uFF0C\u53EF\u7EE7\u7EED\u6309\u4E13\u8F91\u548C\u4E13\u8F91\u5185\u66F2\u76EE\u987A\u5E8F\u6392\u5217\u3002</p>
+      </div>
+      <div class="ncm-sort-date-order">
+        <div class="ncm-sort-choice-list">
+          <button type="button" class="ncm-sort-choice-button is-selected" data-date-order data-descending="true" aria-pressed="true">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+          <button type="button" class="ncm-sort-choice-button" data-date-order data-descending="false" aria-pressed="false">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+        </div>
       </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
@@ -1066,31 +1125,92 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           </span>
         </label>
       </div>
-      <div class="ncm-sort-choice-list">
-        <button id="sort-desc" class="ncm-sort-choice-button">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
-        <button id="sort-asc" class="ncm-sort-choice-button">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
-      </div>
     `,
-      showConfirmButton: false,
+      showConfirmButton: true,
       showCancelButton: true,
+      confirmButtonText: "\u5F00\u59CB\u6392\u5E8F",
       cancelButtonText: "\u53D6\u6D88",
       customClass: swalClasses,
       didOpen: () => {
+        const orderButtons = [...document.querySelectorAll("[data-date-order]")];
         const albumSort = document.getElementById("date-sort-albums");
+        orderButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            orderButtons.forEach((item) => {
+              const selected = item === button;
+              item.classList.toggle("is-selected", selected);
+              item.setAttribute("aria-pressed", String(selected));
+            });
+          });
+        });
         albumSort.addEventListener("change", () => {
           setDateTrackSortDisabled(!albumSort.checked);
         });
-        document.getElementById("sort-desc").addEventListener("click", () => {
-          const config = readDateSortConfig();
-          Swal.close();
-          performDateSort2(pid, true, config);
+      },
+      preConfirm: () => readDateSortConfig()
+    });
+  }
+  function showArtistSortDialog() {
+    return Swal.fire({
+      title: "\u6309\u6B4C\u624B\u6392\u5E8F",
+      html: `
+      <div class="ncm-sort-intro">
+        <p>\u9009\u62E9\u6B4C\u624B\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
+        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u590D\u7528\u6807\u9898\u6392\u5E8F\u4E2D\u7684\u6587\u5B57\u4F53\u7CFB\u3001\u7C7B\u522B\u4F18\u5148\u7EA7\u548C\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\u3002</p>
+      </div>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-name" type="checkbox" checked>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u6B4C\u624B\u6309\u540D\u79F0\u9996\u5B57\u6BCD\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u5173\u95ED\u540E\u4FDD\u6301\u5904\u7406\u524D\u6B4C\u5355\u4E2D\u7684\u539F\u59CB\u987A\u5E8F\u3002</span>
+          </span>
+        </label>
+        <label id="artist-sort-date-row" class="ncm-sort-switch-row is-disabled">
+          <input id="artist-sort-date" type="checkbox" disabled>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u540C\u4E00\u6B4C\u624B\u6309\u53D1\u884C\u65F6\u95F4\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u5F00\u542F\u540E\u540C\u4E00\u6B4C\u624B\u5185\u6309\u53D1\u884C\u65E5\u671F\u6392\u5217\uFF0C\u65E5\u671F\u76F8\u540C\u65F6\u6CBF\u7528\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u7684\u6807\u9898\u515C\u5E95\u89C4\u5219\u3002</span>
+          </span>
+        </label>
+      </div>
+      <div id="artist-date-order-settings" class="ncm-sort-date-order is-disabled">
+        <p class="ncm-sort-label">\u540C\u4E00\u6B4C\u624B\u5185\u7684\u53D1\u884C\u65F6\u95F4\u65B9\u5411\uFF1A</p>
+        <div class="ncm-sort-choice-list">
+          <button type="button" class="ncm-sort-choice-button is-selected" data-artist-date-order data-descending="true" aria-pressed="true" disabled>\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+          <button type="button" class="ncm-sort-choice-button" data-artist-date-order data-descending="false" aria-pressed="false" disabled>\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+        </div>
+      </div>
+    `,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u5F00\u59CB\u6392\u5E8F",
+      cancelButtonText: "\u53D6\u6D88",
+      customClass: swalClasses,
+      didOpen: () => {
+        const artistSort = document.getElementById("artist-sort-name");
+        const dateSort = document.getElementById("artist-sort-date");
+        const orderButtons = [...document.querySelectorAll("[data-artist-date-order]")];
+        artistSort.addEventListener("change", () => {
+          setArtistDateSortDisabled(!artistSort.checked);
         });
-        document.getElementById("sort-asc").addEventListener("click", () => {
-          const config = readDateSortConfig();
-          Swal.close();
-          performDateSort2(pid, false, config);
+        dateSort.addEventListener("change", () => {
+          setArtistDateOrderDisabled(!dateSort.checked);
         });
-      }
+        orderButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            orderButtons.forEach((item) => {
+              const selected = item === button;
+              item.classList.toggle("is-selected", selected);
+              item.setAttribute("aria-pressed", String(selected));
+            });
+          });
+        });
+        setArtistDateSortDisabled(false);
+      },
+      preConfirm: () => readArtistSortConfig()
     });
   }
   function showBatchMoveDialog() {
@@ -1239,6 +1359,32 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
   }
 
+  // src/data/publish-time.js
+  async function ensurePublishTimes(items) {
+    const albumCache = {};
+    const needAlbumFetch = items.filter((item) => !item.publishTime && item.albumId > 0);
+    if (!needAlbumFetch.length) return;
+    showToast(`\u83B7\u53D6 ${needAlbumFetch.length} \u9996\u6B4C\u66F2\u7684\u4E13\u8F91\u4FE1\u606F...`);
+    for (let i = 0; i < needAlbumFetch.length; i++) {
+      const item = needAlbumFetch[i];
+      if (!albumCache[item.albumId]) {
+        try {
+          const albumDetail = await fetchAlbumDetail(item.albumId);
+          if (albumDetail && albumDetail.code === 200) {
+            albumCache[item.albumId] = albumDetail.album.publishTime || 0;
+          }
+          await sleep(100);
+        } catch (e) {
+          console.error(`\u83B7\u53D6\u4E13\u8F91 ${item.albumId} \u5931\u8D25:`, e);
+        }
+      }
+      item.publishTime = albumCache[item.albumId] || 0;
+      if ((i + 1) % 10 === 0) {
+        showToast(`\u83B7\u53D6\u4E13\u8F91\u4FE1\u606F\u8FDB\u5EA6: ${i + 1}/${needAlbumFetch.length}`);
+      }
+    }
+  }
+
   // src/sort/date.js
   var collator2 = new Intl.Collator(void 0, {
     numeric: false,
@@ -1300,35 +1446,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
   // src/operations/sort-by-date.js
   async function sortByPublishDate(pid) {
-    const result = await showDateSortDialog(pid, performDateSort);
+    const result = await showDateSortDialog();
+    if (!result.isConfirmed) return;
+    await performDateSort(pid, result.value.descending, result.value);
   }
   async function performDateSort(pid, descending, dateSortConfig) {
     try {
       showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
       const { playlist, items } = await getAllSongs(pid);
-      const albumCache = {};
-      const needAlbumFetch = items.filter((item) => !item.publishTime && item.albumId > 0);
-      if (needAlbumFetch.length > 0) {
-        showToast(`\u83B7\u53D6 ${needAlbumFetch.length} \u9996\u6B4C\u66F2\u7684\u4E13\u8F91\u4FE1\u606F...`);
-        for (let i = 0; i < needAlbumFetch.length; i++) {
-          const item = needAlbumFetch[i];
-          if (!albumCache[item.albumId]) {
-            try {
-              const albumDetail = await fetchAlbumDetail(item.albumId);
-              if (albumDetail && albumDetail.code === 200) {
-                albumCache[item.albumId] = albumDetail.album.publishTime || 0;
-              }
-              await sleep(100);
-            } catch (e) {
-              console.error(`\u83B7\u53D6\u4E13\u8F91 ${item.albumId} \u5931\u8D25:`, e);
-            }
-          }
-          item.publishTime = albumCache[item.albumId] || 0;
-          if ((i + 1) % 10 === 0) {
-            showToast(`\u83B7\u53D6\u4E13\u8F91\u4FE1\u606F\u8FDB\u5EA6: ${i + 1}/${needAlbumFetch.length}`);
-          }
-        }
-      }
+      await ensurePublishTimes(items);
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
       const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map((x) => x.id);
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
@@ -1340,6 +1466,85 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
 \u6309\u53D1\u884C\u65E5\u671F${descending ? "\u5012\u5E8F" : "\u987A\u5E8F"}\u6392\u5217
+\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+          customClass: swalClasses
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "\u6392\u5E8F\u5931\u8D25",
+          text: JSON.stringify(res),
+          customClass: swalClasses
+        });
+      }
+    } catch (e) {
+      console.error(e);
+      Swal.fire({
+        icon: "error",
+        title: "\u51FA\u9519",
+        text: e?.message || String(e),
+        customClass: swalClasses
+      });
+    }
+  }
+
+  // src/sort/artist.js
+  var DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
+    sortArtistsByName: true,
+    sortSameArtistByDate: false,
+    descending: true
+  });
+  function normalizeArtistSortConfig(config = DEFAULT_ARTIST_SORT_CONFIG) {
+    const source = config && typeof config === "object" ? config : DEFAULT_ARTIST_SORT_CONFIG;
+    const sortArtistsByName = source.sortArtistsByName !== false;
+    return {
+      sortArtistsByName,
+      sortSameArtistByDate: sortArtistsByName && Boolean(source.sortSameArtistByDate),
+      descending: source.descending !== false
+    };
+  }
+  function createArtistComparator(config = DEFAULT_ARTIST_SORT_CONFIG, titleSortConfig) {
+    const normalizedConfig = normalizeArtistSortConfig(config);
+    const compareArtist = createTextComparator(titleSortConfig);
+    const compareDate = cmpByDate(normalizedConfig.descending);
+    return (a, b) => {
+      if (!normalizedConfig.sortArtistsByName) return 0;
+      const artistResult = compareArtist(a.artist || "", b.artist || "");
+      if (artistResult) return artistResult;
+      if (normalizedConfig.sortSameArtistByDate) {
+        return compareDate(a, b);
+      }
+      return 0;
+    };
+  }
+  function sortSongsByArtist(items, config, titleSortConfig) {
+    const compare = createArtistComparator(config, titleSortConfig);
+    return items.map((item, index) => ({ item, index })).sort((a, b) => compare(a.item, b.item) || a.index - b.index).map(({ item }) => item);
+  }
+
+  // src/operations/sort-by-artist.js
+  async function sortByArtist(pid) {
+    const result = await showArtistSortDialog();
+    if (!result.isConfirmed) return;
+    try {
+      showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+      const { playlist, items } = await getAllSongs(pid);
+      if (result.value.sortSameArtistByDate) {
+        await ensurePublishTimes(items);
+      }
+      showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
+      const titleSortConfig = await loadTitleSortConfig();
+      const orderedItems = sortSongsByArtist(items, result.value, titleSortConfig);
+      const ordered = orderedItems.map((item) => item.id);
+      showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+      const res = await updatePlaylistOrder(pid, ordered);
+      if (res && res.code === 200) {
+        Swal.fire({
+          icon: "success",
+          title: "\u6392\u5E8F\u5B8C\u6210",
+          text: `${playlist.name}
+\u5171 ${ordered.length} \u9996
+\u6309\u6B4C\u624B${result.value.sortSameArtistByDate ? "\u53CA\u53D1\u884C\u65E5\u671F" : ""}\u6392\u5217
 \u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
           customClass: swalClasses
         });
@@ -1468,6 +1673,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       <div class="ncm-sort-menu">
         <button id="sort-by-title" class="ncm-sort-menu-button">\u6309\u6807\u9898\u6392\u5E8F</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
+        <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
         <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
       </div>
@@ -1494,6 +1700,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           Swal.close();
           try {
             await sortByPublishDate(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
+        document.getElementById("sort-by-artist").addEventListener("click", async () => {
+          Swal.close();
+          try {
+            await sortByArtist(pid);
           } catch (e) {
             console.error(e);
             Swal.fire({

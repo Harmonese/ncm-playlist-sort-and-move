@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Added artist sorting with reusable title writing-system rules and optional release-date sorting within each artist.
+
+### Changed
+
+- Changed release-date sorting to require an explicit “开始排序” confirmation after selecting the direction and optional album ordering.
+
 ## [0.5.4] - 2026-08-30
 
 ### Added

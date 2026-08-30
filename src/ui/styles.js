@@ -137,6 +137,17 @@ export function installStyles() {
       color: #205e58 !important;
     }
 
+    .ncm-sort-choice-button.is-selected {
+      border-color: #5c9a93 !important;
+      background: #e5f2f0 !important;
+      color: #205e58 !important;
+      box-shadow: inset 3px 0 0 #2f7d75 !important;
+    }
+
+    .ncm-sort-choice-button:disabled {
+      cursor: not-allowed;
+    }
+
     .ncm-sort-menu-button-danger {
       border-color: #efd0d0 !important;
       background: #fff7f7 !important;
@@ -185,6 +196,18 @@ export function installStyles() {
       border-radius: 8px;
       background: #fbfcfc;
       text-align: left;
+    }
+
+    .ncm-sort-date-order {
+      display: grid;
+      gap: 8px;
+      margin-bottom: 18px;
+      text-align: left;
+      transition: opacity 0.15s ease;
+    }
+
+    .ncm-sort-date-order.is-disabled {
+      opacity: 0.48;
     }
 
     .ncm-sort-switch-row input {

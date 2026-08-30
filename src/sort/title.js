@@ -206,13 +206,19 @@ function compareTitles(titleA, titleB, config) {
   return compareUnicodeStrings(titleA, titleB);
 }
 
-export function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
+export function createTextComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
   const normalizedConfig = normalizeTitleSortConfig(config);
+
+  return (textA = '', textB = '') => compareTitles(textA, textB, normalizedConfig);
+}
+
+export function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
+  const compareText = createTextComparator(config);
 
   return (a, b) => {
     const titleA = a.title || '';
     const titleB = b.title || '';
-    const titleResult = compareTitles(titleA, titleB, normalizedConfig);
+    const titleResult = compareText(titleA, titleB);
     if (titleResult) return titleResult;
 
     const artistResult = collator.compare(a.artist || '', b.artist || '');

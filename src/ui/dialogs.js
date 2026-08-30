@@ -74,7 +74,10 @@ function setPriorityDisabled(disabled) {
 }
 
 function readDateSortConfig() {
+  const selectedOrder = document.querySelector('[data-date-order].is-selected');
+
   return {
+    descending: selectedOrder?.dataset.descending !== 'false',
     sortAlbumsByName: document.getElementById('date-sort-albums').checked,
     sortAlbumTracks: document.getElementById('date-sort-tracks').checked
   };
@@ -86,6 +89,34 @@ function setDateTrackSortDisabled(disabled) {
   input.disabled = disabled;
   if (disabled) input.checked = false;
   row.classList.toggle('is-disabled', disabled);
+}
+
+function readArtistSortConfig() {
+  const selectedOrder = document.querySelector('[data-artist-date-order].is-selected');
+
+  return {
+    sortArtistsByName: document.getElementById('artist-sort-name').checked,
+    sortSameArtistByDate: document.getElementById('artist-sort-date').checked,
+    descending: selectedOrder?.dataset.descending !== 'false'
+  };
+}
+
+function setArtistDateOrderDisabled(disabled) {
+  const container = document.getElementById('artist-date-order-settings');
+  const buttons = [...document.querySelectorAll('[data-artist-date-order]')];
+  buttons.forEach(button => {
+    button.disabled = disabled;
+  });
+  container.classList.toggle('is-disabled', disabled);
+}
+
+function setArtistDateSortDisabled(disabled) {
+  const input = document.getElementById('artist-sort-date');
+  const row = document.getElementById('artist-sort-date-row');
+  input.disabled = disabled;
+  if (disabled) input.checked = false;
+  row.classList.toggle('is-disabled', disabled);
+  setArtistDateOrderDisabled(disabled || !input.checked);
 }
 
 export async function showTitleSortDialog(categoryIds) {
@@ -171,13 +202,19 @@ export async function showTitleSortDialog(categoryIds) {
   });
 }
 
-export async function showDateSortDialog(pid, performDateSort) {
-  const result = await Swal.fire({
+export function showDateSortDialog() {
+  return Swal.fire({
     title: '按发行日期排序',
     html: `
       <div class="ncm-sort-intro">
-        <p>选择排序方式：</p>
+        <p>选择排序方向：</p>
         <p class="ncm-sort-help">发行日期相同时，可继续按专辑和专辑内曲目顺序排列。</p>
+      </div>
+      <div class="ncm-sort-date-order">
+        <div class="ncm-sort-choice-list">
+          <button type="button" class="ncm-sort-choice-button is-selected" data-date-order data-descending="true" aria-pressed="true">从新到旧（倒序）</button>
+          <button type="button" class="ncm-sort-choice-button" data-date-order data-descending="false" aria-pressed="false">从旧到新（顺序）</button>
+        </div>
       </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
@@ -197,32 +234,99 @@ export async function showDateSortDialog(pid, performDateSort) {
           </span>
         </label>
       </div>
-      <div class="ncm-sort-choice-list">
-        <button id="sort-desc" class="ncm-sort-choice-button">从新到旧（倒序）</button>
-        <button id="sort-asc" class="ncm-sort-choice-button">从旧到新（顺序）</button>
-      </div>
     `,
-    showConfirmButton: false,
+    showConfirmButton: true,
     showCancelButton: true,
+    confirmButtonText: '开始排序',
     cancelButtonText: '取消',
     customClass: swalClasses,
     didOpen: () => {
+      const orderButtons = [...document.querySelectorAll('[data-date-order]')];
       const albumSort = document.getElementById('date-sort-albums');
+
+      orderButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          orderButtons.forEach((item) => {
+            const selected = item === button;
+            item.classList.toggle('is-selected', selected);
+            item.setAttribute('aria-pressed', String(selected));
+          });
+        });
+      });
+
       albumSort.addEventListener('change', () => {
         setDateTrackSortDisabled(!albumSort.checked);
       });
+    },
+    preConfirm: () => readDateSortConfig()
+  });
+}
 
-      document.getElementById('sort-desc').addEventListener('click', () => {
-        const config = readDateSortConfig();
-        Swal.close();
-        performDateSort(pid, true, config);
+export function showArtistSortDialog() {
+  return Swal.fire({
+    title: '按歌手排序',
+    html: `
+      <div class="ncm-sort-intro">
+        <p>选择歌手排序方式：</p>
+        <p class="ncm-sort-help">歌手名称会复用标题排序中的文字体系、类别优先级和汉字排序方式。</p>
+      </div>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-name" type="checkbox" checked>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">歌手按名称首字母排序</span>
+            <span class="ncm-sort-switch-help">关闭后保持处理前歌单中的原始顺序。</span>
+          </span>
+        </label>
+        <label id="artist-sort-date-row" class="ncm-sort-switch-row is-disabled">
+          <input id="artist-sort-date" type="checkbox" disabled>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">同一歌手按发行时间排序</span>
+            <span class="ncm-sort-switch-help">开启后同一歌手内按发行日期排列，日期相同时沿用发行日期排序的标题兜底规则。</span>
+          </span>
+        </label>
+      </div>
+      <div id="artist-date-order-settings" class="ncm-sort-date-order is-disabled">
+        <p class="ncm-sort-label">同一歌手内的发行时间方向：</p>
+        <div class="ncm-sort-choice-list">
+          <button type="button" class="ncm-sort-choice-button is-selected" data-artist-date-order data-descending="true" aria-pressed="true" disabled>从新到旧（倒序）</button>
+          <button type="button" class="ncm-sort-choice-button" data-artist-date-order data-descending="false" aria-pressed="false" disabled>从旧到新（顺序）</button>
+        </div>
+      </div>
+    `,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '开始排序',
+    cancelButtonText: '取消',
+    customClass: swalClasses,
+    didOpen: () => {
+      const artistSort = document.getElementById('artist-sort-name');
+      const dateSort = document.getElementById('artist-sort-date');
+      const orderButtons = [...document.querySelectorAll('[data-artist-date-order]')];
+
+      artistSort.addEventListener('change', () => {
+        setArtistDateSortDisabled(!artistSort.checked);
       });
-      document.getElementById('sort-asc').addEventListener('click', () => {
-        const config = readDateSortConfig();
-        Swal.close();
-        performDateSort(pid, false, config);
+
+      dateSort.addEventListener('change', () => {
+        setArtistDateOrderDisabled(!dateSort.checked);
       });
-    }
+
+      orderButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+          orderButtons.forEach((item) => {
+            const selected = item === button;
+            item.classList.toggle('is-selected', selected);
+            item.setAttribute('aria-pressed', String(selected));
+          });
+        });
+      });
+
+      setArtistDateSortDisabled(false);
+    },
+    preConfirm: () => readArtistSortConfig()
   });
 }
 
