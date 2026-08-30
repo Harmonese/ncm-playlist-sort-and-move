@@ -18,7 +18,7 @@ const song = (title, id, popularity, commentCount, redCount = null) => ({
 test('heat sorting exposes red count, popularity, and comment count metrics', () => {
   assert.deepEqual(
     HEAT_SORT_METRICS.map(metric => metric.id),
-    ['redCount', 'popularity', 'commentCount']
+    ['popularity', 'redCount', 'commentCount']
   );
 });
 

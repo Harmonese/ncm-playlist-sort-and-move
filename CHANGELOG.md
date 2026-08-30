@@ -6,6 +6,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.6.1] - 2026-08-31
+
+### Changed
+
+- Unified title and artist text-comparison descriptions and made their separate text detection scopes explicit.
+- Added the shared release-date direction and album tie-breaker controls to the artist sorting dialog.
+- Reordered heat sorting metrics so song popularity appears before red-heart count.
+
 ## [0.6.0] - 2026-08-31
 
 ### Added

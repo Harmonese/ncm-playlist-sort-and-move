@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.6.0
+// @version      0.6.1
 // @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -299,9 +299,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
     if (!detected.size) detected.add("other");
     return TITLE_CATEGORIES.filter((category) => detected.has(category.id)).map((category) => category.id);
-  }
-  function detectTitleCategoryIds(items = []) {
-    return detectTextCategoryIds(items.map((item) => item.title || ""));
   }
   function compareUnicodeCharacters(a, b) {
     return (a.codePointAt(0) || 0) - (b.codePointAt(0) || 0);
@@ -1130,8 +1127,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
   // src/sort/heat.js
   var HEAT_SORT_METRICS = Object.freeze([
-    { id: "redCount", label: "\u7EA2\u5FC3\u6570\u91CF" },
     { id: "popularity", label: "\u70ED\u5EA6\u503C" },
+    { id: "redCount", label: "\u7EA2\u5FC3\u6570\u91CF" },
     { id: "commentCount", label: "\u8BC4\u8BBA\u6570\u91CF" }
   ]);
   var HEAT_SORT_METRIC_IDS = new Set(HEAT_SORT_METRICS.map((metric) => metric.id));
@@ -1175,7 +1172,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
 
   // src/ui/dialogs.js
-  function getVisibleTitleCategories(categoryIds) {
+  function getVisibleTextCategories(categoryIds) {
     const requestedIds = Array.isArray(categoryIds) ? new Set(categoryIds) : new Set(TITLE_CATEGORIES.map((category) => category.id));
     const categories = TITLE_CATEGORIES.filter((category) => requestedIds.has(category.id));
     return categories.length ? categories : [TITLE_CATEGORIES.find((category) => category.id === "other")];
@@ -1208,18 +1205,21 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     </li>
   `).join("");
   }
-  function readTextSortConfig(prefix) {
+  function readTextSortConfig(prefix, fallbackCategoryOrder = []) {
     const list = document.getElementById(`${prefix}-priority-list`);
     const directStringCompare = document.getElementById(`${prefix}-direct-compare`).checked;
     const chineseSort = document.getElementById(`${prefix}-chinese-sort`).value;
+    const visibleOrder = [...list.querySelectorAll("[data-category]")].map((item) => item.dataset.category);
+    const visibleIds = new Set(visibleOrder);
+    const hiddenOrder = fallbackCategoryOrder.filter((categoryId) => !visibleIds.has(categoryId));
     return {
       directStringCompare,
-      categoryOrder: [...list.querySelectorAll("[data-category]")].map((item) => item.dataset.category),
+      categoryOrder: [...visibleOrder, ...hiddenOrder],
       chineseSort
     };
   }
-  function readTitleSortConfig() {
-    return readTextSortConfig("title");
+  function readTitleSortConfig(savedConfig) {
+    return readTextSortConfig("title", savedConfig.categoryOrder);
   }
   function refreshPriorityIndexes(list) {
     [...list.querySelectorAll(".ncm-sort-priority-item")].forEach((item, index) => {
@@ -1231,12 +1231,12 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     fieldset.disabled = disabled;
     fieldset.classList.toggle("is-disabled", disabled);
   }
-  function readDateSortConfig() {
-    const selectedOrder = document.querySelector("[data-date-order].is-selected");
+  function readDateSortConfig(prefix = "date") {
+    const selectedOrder = document.querySelector(`[data-${prefix}-order].is-selected`);
     return {
       descending: selectedOrder?.dataset.descending !== "false",
-      sortAlbumsByName: document.getElementById("date-sort-albums").checked,
-      sortAlbumTracks: document.getElementById("date-sort-tracks").checked
+      sortAlbumsByName: document.getElementById(`${prefix}-sort-albums`).checked,
+      sortAlbumTracks: document.getElementById(`${prefix}-sort-tracks`).checked
     };
   }
   function readHeatSortConfig() {
@@ -1246,23 +1246,24 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       descending: selected?.dataset.descending !== "false"
     };
   }
-  function setDateTrackSortDisabled(disabled) {
-    const input = document.getElementById("date-sort-tracks");
-    const row = document.getElementById("date-sort-tracks-row");
+  function setDateTrackSortDisabled(disabled, prefix = "date") {
+    const input = document.getElementById(`${prefix}-sort-tracks`);
+    const row = document.getElementById(`${prefix}-sort-tracks-row`);
     input.disabled = disabled;
     if (disabled) input.checked = false;
     row.classList.toggle("is-disabled", disabled);
   }
-  function readArtistSortConfig() {
+  function readArtistSortConfig(textCategoryOrder) {
     return {
       sortArtistsByName: document.getElementById("artist-sort-name").checked,
       sortSameArtistByDate: document.getElementById("artist-sort-date").checked,
-      textSortConfig: readTextSortConfig("artist")
+      textSortConfig: readTextSortConfig("artist", textCategoryOrder),
+      dateSortConfig: readDateSortConfig("artist-date")
     };
   }
   async function showTitleSortDialog(categoryIds) {
     const savedConfig = await loadTitleSortConfig();
-    const visibleCategories = getVisibleTitleCategories(categoryIds);
+    const visibleCategories = getVisibleTextCategories(categoryIds);
     const categories = orderTitleCategories(visibleCategories, savedConfig.categoryOrder);
     const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
@@ -1270,10 +1271,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       html: `
       <div class="ncm-sort-title-settings">
         <div class="ncm-sort-intro">
-          <p>\u9009\u62E9\u6807\u9898\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
-          <p class="ncm-sort-help">\u5173\u95ED\u76F4\u63A5\u6BD4\u8F83\u65F6\uFF0C\u811A\u672C\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
-          <p class="ncm-sort-help">\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
-          <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
+          <p>\u9009\u62E9\u6807\u9898\u6587\u5B57\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
+          <p class="ncm-sort-help">\u6807\u9898\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
+          <p class="ncm-sort-help">\u8FD9\u5957\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6B4C\u624B\u6392\u5E8F\u201D\u5171\u4EAB\uFF0C\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
+          <p class="ncm-sort-help">\u6807\u9898\u548C\u6B4C\u624B\u5206\u522B\u68C0\u6D4B\u5404\u81EA\u6587\u672C\u4E2D\u51FA\u73B0\u7684\u6587\u5B57\u4F53\u7CFB\uFF0C\u56E0\u6B64\u7C7B\u522B\u6570\u91CF\u53EF\u80FD\u4E0D\u540C\u3002</p>
+          <p class="ncm-sort-detected">\u5F53\u524D\u6807\u9898\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
         </div>
 
         <label class="ncm-sort-switch-row">
@@ -1286,7 +1288,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         </label>
 
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
-          <legend>\u5B57\u7B26\u7C7B\u522B\u4F18\u5148\u7EA7</legend>
+          <legend>\u6587\u5B57\u4F53\u7CFB\u4F18\u5148\u7EA7</legend>
           <p class="ncm-sort-help">\u4EC5\u663E\u793A\u5F53\u524D\u6B4C\u5355\u51FA\u73B0\u7684\u7C7B\u522B\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\uFF0C\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
           <ol id="title-priority-list" class="ncm-sort-priority-list">
             ${createTitleCategoryList(categories)}
@@ -1330,7 +1332,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         });
         setPriorityDisabled(directCompare.checked);
       },
-      preConfirm: () => readTitleSortConfig()
+      preConfirm: () => readTitleSortConfig(savedConfig)
     });
   }
   async function showDateSortDialog() {
@@ -1396,16 +1398,18 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const artistConfig = savedSettings || await loadArtistSortSettings();
     const textConfig = await loadTitleSortConfig();
     const dateConfig = await loadDateSortSettings();
-    const visibleCategories = getVisibleTitleCategories(categoryIds);
+    const visibleCategories = getVisibleTextCategories(categoryIds);
     const categories = orderTitleCategories(visibleCategories, textConfig.categoryOrder);
     const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
       title: "\u6309\u6B4C\u624B\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
-        <p>\u9009\u62E9\u6B4C\u624B\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
-        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u6BD4\u8F83\uFF0C\u4E0B\u9762\u7684\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6807\u9898\u6392\u5E8F\u201D\u5171\u4EAB\u3002</p>
-        <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
+        <p>\u9009\u62E9\u6B4C\u624B\u6587\u5B57\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
+        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
+        <p class="ncm-sort-help">\u8FD9\u5957\u6587\u5B57\u89C4\u5219\u4E0E\u201C\u6309\u6807\u9898\u6392\u5E8F\u201D\u5171\u4EAB\uFF0C\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
+        <p class="ncm-sort-help">\u6807\u9898\u548C\u6B4C\u624B\u5206\u522B\u68C0\u6D4B\u5404\u81EA\u6587\u672C\u4E2D\u51FA\u73B0\u7684\u6587\u5B57\u4F53\u7CFB\uFF0C\u56E0\u6B64\u7C7B\u522B\u6570\u91CF\u53EF\u80FD\u4E0D\u540C\u3002</p>
+        <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u624B\u540D\u79F0\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
       </div>
       <fieldset id="artist-text-settings" class="ncm-sort-priority-panel">
         <legend>\u6587\u5B57\u6BD4\u8F83\u89C4\u5219\uFF08\u4E0E\u6807\u9898\u6392\u5E8F\u5171\u4EAB\uFF09</legend>
@@ -1453,7 +1457,31 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           </span>
         </label>
       </div>
-      <p class="ncm-sort-detected">\u540C\u6B4C\u624B\u53D1\u884C\u65E5\u671F\u89C4\u5219\uFF1A${dateConfig.descending ? "\u4ECE\u65B0\u5230\u65E7" : "\u4ECE\u65E7\u5230\u65B0"}${dateConfig.sortAlbumsByName ? "\uFF0C\u65E5\u671F\u76F8\u540C\u65F6\u6309\u4E13\u8F91\u540D\u79F0" : ""}${dateConfig.sortAlbumTracks ? "\u53CA\u4E13\u8F91\u5185\u66F2\u76EE\u987A\u5E8F" : ""}\uFF08\u4E0E\u201C\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u201D\u5171\u4EAB\uFF09</p>
+      <div class="ncm-sort-date-order">
+        <p class="ncm-sort-help">\u540C\u4E00\u6B4C\u624B\u5185\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u65F6\uFF0C\u4F7F\u7528\u4E0B\u9762\u7684\u53D1\u884C\u65E5\u671F\u89C4\u5219\uFF1B\u4E0E\u201C\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u201D\u5171\u4EAB\u3002</p>
+        <div class="ncm-sort-choice-list">
+          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "is-selected" : ""}" data-artist-date-order data-descending="true" aria-pressed="${dateConfig.descending}">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+          <button type="button" class="ncm-sort-choice-button ${dateConfig.descending ? "" : "is-selected"}" data-artist-date-order data-descending="false" aria-pressed="${!dateConfig.descending}">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+        </div>
+      </div>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="artist-date-sort-albums" type="checkbox" ${dateConfig.sortAlbumsByName ? "checked" : ""}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u4E0D\u540C\u4E13\u8F91\u6309\u4E13\u8F91\u540D\u79F0\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u5C06\u540C\u4E00\u53D1\u884C\u65E5\u671F\u4E0B\u7684\u6B4C\u66F2\u6309\u4E13\u8F91\u540D\u79F0\u805A\u62E2\u3002</span>
+          </span>
+        </label>
+        <label id="artist-date-sort-tracks-row" class="ncm-sort-switch-row ${dateConfig.sortAlbumsByName ? "" : "is-disabled"}">
+          <input id="artist-date-sort-tracks" type="checkbox" ${dateConfig.sortAlbumTracks ? "checked" : ""} ${dateConfig.sortAlbumsByName ? "" : "disabled"}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u540C\u4E00\u4E13\u8F91\u6309\u4E13\u8F91\u5185\u6B4C\u66F2\u987A\u5E8F\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u9700\u8981\u5148\u5F00\u542F\u4E0A\u9762\u7684\u4E13\u8F91\u540D\u79F0\u6392\u5E8F\u3002</span>
+          </span>
+        </label>
+      </div>
     `,
       showConfirmButton: true,
       showCancelButton: true,
@@ -1463,6 +1491,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       didOpen: () => {
         const directCompare = document.getElementById("artist-direct-compare");
         const list = document.getElementById("artist-priority-list");
+        const orderButtons = [...document.querySelectorAll("[data-artist-date-order]")];
+        const albumSort = document.getElementById("artist-date-sort-albums");
         directCompare.addEventListener("change", () => {
           setPriorityDisabled(directCompare.checked, "artist");
         });
@@ -1479,9 +1509,22 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           }
           refreshPriorityIndexes(list);
         });
+        orderButtons.forEach((button) => {
+          button.addEventListener("click", () => {
+            orderButtons.forEach((item) => {
+              const selected = item === button;
+              item.classList.toggle("is-selected", selected);
+              item.setAttribute("aria-pressed", String(selected));
+            });
+          });
+        });
+        albumSort.addEventListener("change", () => {
+          setDateTrackSortDisabled(!albumSort.checked, "artist-date");
+        });
         setPriorityDisabled(directCompare.checked, "artist");
+        setDateTrackSortDisabled(!albumSort.checked, "artist-date");
       },
-      preConfirm: () => readArtistSortConfig()
+      preConfirm: () => readArtistSortConfig(textConfig.categoryOrder)
     });
   }
   function showHeatSortDialog(savedConfig) {
@@ -1711,7 +1754,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   async function sortByTitle(pid) {
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2\u5E76\u8BC6\u522B\u6587\u5B57\u4F53\u7CFB...");
     const { playlist, items, originalSongIds } = await getAllSongs(pid);
-    const categoryIds = detectTitleCategoryIds(items);
+    const categoryIds = detectTextCategoryIds(items.map((item) => item.title || ""));
     const settings = await showTitleSortDialog(categoryIds);
     if (!settings.isConfirmed) return;
     await saveTitleSortConfig(settings.value);
@@ -1823,6 +1866,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     try {
       await saveTitleSortConfig(result.value.textSortConfig);
       await saveArtistSortSettings(result.value);
+      await saveDateSortSettings(result.value.dateSortConfig);
       if (result.value.sortSameArtistByDate) {
         await ensurePublishTimes(items);
       }

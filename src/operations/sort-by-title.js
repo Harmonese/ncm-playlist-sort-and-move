@@ -1,7 +1,7 @@
 import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
-import { createTitleComparator, detectTitleCategoryIds } from '../sort/title.js';
+import { createTitleComparator, detectTextCategoryIds } from '../sort/title.js';
 import { saveTitleSortConfig } from '../settings/title-sort.js';
 import { showTitleSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
@@ -10,7 +10,7 @@ import { saveOrderBackup } from '../settings/order-backup.js';
 export async function sortByTitle(pid) {
   showToast('开始获取歌单歌曲并识别文字体系...');
   const { playlist, items, originalSongIds } = await getAllSongs(pid);
-  const categoryIds = detectTitleCategoryIds(items);
+  const categoryIds = detectTextCategoryIds(items.map(item => item.title || ''));
   const settings = await showTitleSortDialog(categoryIds);
 
   if (!settings.isConfirmed) return;

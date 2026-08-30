@@ -1,8 +1,8 @@
 import { getOriginalIndex } from './order.js';
 
 export const HEAT_SORT_METRICS = Object.freeze([
-  { id: 'redCount', label: '红心数量' },
   { id: 'popularity', label: '热度值' },
+  { id: 'redCount', label: '红心数量' },
   { id: 'commentCount', label: '评论数量' }
 ]);
 

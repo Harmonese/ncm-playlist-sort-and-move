@@ -5,7 +5,7 @@ import { ensurePublishTimes } from '../data/publish-time.js';
 import { sortSongsByArtist } from '../sort/artist.js';
 import { saveTitleSortConfig } from '../settings/title-sort.js';
 import { loadArtistSortSettings, saveArtistSortSettings } from '../settings/artist-sort.js';
-import { loadDateSortSettings } from '../settings/date-sort.js';
+import { loadDateSortSettings, saveDateSortSettings } from '../settings/date-sort.js';
 import { showArtistSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
 import { detectTextCategoryIds } from '../sort/title.js';
@@ -23,6 +23,7 @@ export async function sortByArtist(pid) {
   try {
     await saveTitleSortConfig(result.value.textSortConfig);
     await saveArtistSortSettings(result.value);
+    await saveDateSortSettings(result.value.dateSortConfig);
 
     if (result.value.sortSameArtistByDate) {
       await ensurePublishTimes(items);
