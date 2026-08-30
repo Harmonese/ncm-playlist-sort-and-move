@@ -101,11 +101,11 @@ function classifyCharacter(character) {
   return 'other';
 }
 
-export function detectTitleCategoryIds(items = []) {
+export function detectTextCategoryIds(texts = []) {
   const detected = new Set();
 
-  for (const item of items) {
-    for (const character of Array.from(item.title || '')) {
+  for (const text of texts) {
+    for (const character of Array.from(text || '')) {
       detected.add(classifyCharacter(character));
     }
   }
@@ -115,6 +115,10 @@ export function detectTitleCategoryIds(items = []) {
   return TITLE_CATEGORIES
     .filter(category => detected.has(category.id))
     .map(category => category.id);
+}
+
+export function detectTitleCategoryIds(items = []) {
+  return detectTextCategoryIds(items.map(item => item.title || ''));
 }
 
 function compareUnicodeCharacters(a, b) {

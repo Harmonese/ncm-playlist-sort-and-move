@@ -14,6 +14,14 @@ const {
   loadTitleSortConfig,
   saveTitleSortConfig
 } = await import('../src/settings/title-sort.js');
+const {
+  loadArtistSortSettings,
+  saveArtistSortSettings
+} = await import('../src/settings/artist-sort.js');
+const {
+  loadDateSortSettings,
+  saveDateSortSettings
+} = await import('../src/settings/date-sort.js');
 
 test('title sort settings use defaults when nothing is saved', async () => {
   storedValues.clear();
@@ -61,4 +69,52 @@ test('invalid saved settings fall back to valid defaults', async () => {
   assert.equal(config.directStringCompare, true);
   assert.equal(config.chineseSort, 'pinyin');
   assert.deepEqual(config.categoryOrder.slice(0, 2), ['latin', 'han']);
+});
+
+test('artist settings default to following title settings', async () => {
+  storedValues.clear();
+
+  const settings = await loadArtistSortSettings();
+
+  assert.equal(settings.useTitleSortConfig, true);
+  assert.equal(settings.sortArtistsByName, true);
+  assert.equal(settings.sortSameArtistByDate, false);
+  assert.equal(settings.customTextConfig.chineseSort, 'pinyin');
+});
+
+test('artist settings preserve an independent custom text configuration', async () => {
+  await saveArtistSortSettings({
+    useTitleSortConfig: false,
+    sortArtistsByName: true,
+    sortSameArtistByDate: true,
+    customTextConfig: {
+      directStringCompare: true,
+      categoryOrder: ['han', 'latin'],
+      chineseSort: 'stroke'
+    }
+  });
+
+  const settings = await loadArtistSortSettings();
+
+  assert.equal(settings.useTitleSortConfig, false);
+  assert.equal(settings.sortSameArtistByDate, true);
+  assert.equal(settings.customTextConfig.directStringCompare, true);
+  assert.equal(settings.customTextConfig.chineseSort, 'stroke');
+  assert.deepEqual(settings.customTextConfig.categoryOrder.slice(0, 2), ['han', 'latin']);
+});
+
+test('date direction and tie-breakers are shared settings', async () => {
+  await saveDateSortSettings({
+    descending: false,
+    sortAlbumsByName: true,
+    sortAlbumTracks: true
+  });
+
+  const settings = await loadDateSortSettings();
+
+  assert.deepEqual(settings, {
+    descending: false,
+    sortAlbumsByName: true,
+    sortAlbumTracks: true
+  });
 });

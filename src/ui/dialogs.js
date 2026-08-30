@@ -4,6 +4,8 @@ import {
   TITLE_CHINESE_SORTS
 } from '../sort/title.js';
 import { loadTitleSortConfig } from '../settings/title-sort.js';
+import { loadArtistSortSettings } from '../settings/artist-sort.js';
+import { loadDateSortSettings } from '../settings/date-sort.js';
 
 function getVisibleTitleCategories(categoryIds) {
   const requestedIds = Array.isArray(categoryIds)
@@ -49,10 +51,10 @@ function createTitleCategoryList(categories) {
   `).join('');
 }
 
-function readTitleSortConfig() {
-  const list = document.querySelector('.ncm-sort-priority-list');
-  const directStringCompare = document.getElementById('title-direct-compare').checked;
-  const chineseSort = document.getElementById('title-chinese-sort').value;
+function readTextSortConfig(prefix) {
+  const list = document.getElementById(`${prefix}-priority-list`);
+  const directStringCompare = document.getElementById(`${prefix}-direct-compare`).checked;
+  const chineseSort = document.getElementById(`${prefix}-chinese-sort`).value;
 
   return {
     directStringCompare,
@@ -61,14 +63,18 @@ function readTitleSortConfig() {
   };
 }
 
+function readTitleSortConfig() {
+  return readTextSortConfig('title');
+}
+
 function refreshPriorityIndexes(list) {
   [...list.querySelectorAll('.ncm-sort-priority-item')].forEach((item, index) => {
     item.querySelector('.ncm-sort-priority-index').textContent = index + 1;
   });
 }
 
-function setPriorityDisabled(disabled) {
-  const fieldset = document.getElementById('title-category-priority');
+function setPriorityDisabled(disabled, prefix = 'title') {
+  const fieldset = document.getElementById(`${prefix}-category-priority`);
   fieldset.disabled = disabled;
   fieldset.classList.toggle('is-disabled', disabled);
 }
@@ -92,31 +98,18 @@ function setDateTrackSortDisabled(disabled) {
 }
 
 function readArtistSortConfig() {
-  const selectedOrder = document.querySelector('[data-artist-date-order].is-selected');
-
   return {
     sortArtistsByName: document.getElementById('artist-sort-name').checked,
     sortSameArtistByDate: document.getElementById('artist-sort-date').checked,
-    descending: selectedOrder?.dataset.descending !== 'false'
+    useTitleSortConfig: document.getElementById('artist-text-source').value === 'title',
+    customTextConfig: readTextSortConfig('artist')
   };
 }
 
-function setArtistDateOrderDisabled(disabled) {
-  const container = document.getElementById('artist-date-order-settings');
-  const buttons = [...document.querySelectorAll('[data-artist-date-order]')];
-  buttons.forEach(button => {
-    button.disabled = disabled;
-  });
-  container.classList.toggle('is-disabled', disabled);
-}
-
-function setArtistDateSortDisabled(disabled) {
-  const input = document.getElementById('artist-sort-date');
-  const row = document.getElementById('artist-sort-date-row');
-  input.disabled = disabled;
-  if (disabled) input.checked = false;
-  row.classList.toggle('is-disabled', disabled);
-  setArtistDateOrderDisabled(disabled || !input.checked);
+function setArtistTextConfigDisabled(disabled) {
+  const fieldset = document.getElementById('artist-text-settings');
+  fieldset.disabled = disabled;
+  fieldset.classList.toggle('is-disabled', disabled);
 }
 
 export async function showTitleSortDialog(categoryIds) {
@@ -148,7 +141,7 @@ export async function showTitleSortDialog(categoryIds) {
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>字符类别优先级</legend>
           <p class="ncm-sort-help">仅显示当前歌单出现的类别。越靠上优先级越高，每个标题位置都会使用同一套顺序。</p>
-          <ol class="ncm-sort-priority-list">
+          <ol id="title-priority-list" class="ncm-sort-priority-list">
             ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
@@ -202,7 +195,9 @@ export async function showTitleSortDialog(categoryIds) {
   });
 }
 
-export function showDateSortDialog() {
+export async function showDateSortDialog() {
+  const savedConfig = await loadDateSortSettings();
+
   return Swal.fire({
     title: '按发行日期排序',
     html: `
@@ -212,21 +207,21 @@ export function showDateSortDialog() {
       </div>
       <div class="ncm-sort-date-order">
         <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button is-selected" data-date-order data-descending="true" aria-pressed="true">从新到旧（倒序）</button>
-          <button type="button" class="ncm-sort-choice-button" data-date-order data-descending="false" aria-pressed="false">从旧到新（顺序）</button>
+          <button type="button" class="ncm-sort-choice-button ${savedConfig.descending ? 'is-selected' : ''}" data-date-order data-descending="true" aria-pressed="${savedConfig.descending}">从新到旧（倒序）</button>
+          <button type="button" class="ncm-sort-choice-button ${savedConfig.descending ? '' : 'is-selected'}" data-date-order data-descending="false" aria-pressed="${!savedConfig.descending}">从旧到新（顺序）</button>
         </div>
       </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
-          <input id="date-sort-albums" type="checkbox">
+          <input id="date-sort-albums" type="checkbox" ${savedConfig.sortAlbumsByName ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">不同专辑按专辑名称排序</span>
             <span class="ncm-sort-switch-help">将同一发行日期下的歌曲按专辑名称聚拢。</span>
           </span>
         </label>
-        <label id="date-sort-tracks-row" class="ncm-sort-switch-row is-disabled">
-          <input id="date-sort-tracks" type="checkbox" disabled>
+        <label id="date-sort-tracks-row" class="ncm-sort-switch-row ${savedConfig.sortAlbumsByName ? '' : 'is-disabled'}">
+          <input id="date-sort-tracks" type="checkbox" ${savedConfig.sortAlbumTracks ? 'checked' : ''} ${savedConfig.sortAlbumsByName ? '' : 'disabled'}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">同一专辑按专辑内歌曲顺序排序</span>
@@ -257,44 +252,90 @@ export function showDateSortDialog() {
       albumSort.addEventListener('change', () => {
         setDateTrackSortDisabled(!albumSort.checked);
       });
+
+      setDateTrackSortDisabled(!albumSort.checked);
     },
     preConfirm: () => readDateSortConfig()
   });
 }
 
-export function showArtistSortDialog() {
+export async function showArtistSortDialog(categoryIds, savedSettings) {
+  const artistConfig = savedSettings || await loadArtistSortSettings();
+  const titleConfig = await loadTitleSortConfig();
+  const dateConfig = await loadDateSortSettings();
+  const customTextConfig = artistConfig.customTextConfig;
+  const visibleCategories = getVisibleTitleCategories(categoryIds);
+  const categories = orderTitleCategories(
+    visibleCategories,
+    artistConfig.useTitleSortConfig
+      ? titleConfig.categoryOrder
+      : customTextConfig.categoryOrder
+  );
+  const customCategories = orderTitleCategories(visibleCategories, customTextConfig.categoryOrder);
+  const categoryNames = categories.map(category => category.label).join('、');
+
   return Swal.fire({
     title: '按歌手排序',
     html: `
       <div class="ncm-sort-intro">
         <p>选择歌手排序方式：</p>
-        <p class="ncm-sort-help">歌手名称会复用标题排序中的文字体系、类别优先级和汉字排序方式。</p>
+        <p class="ncm-sort-help">歌手名称会从左到右比较。文字规则可以跟随标题，也可以单独设置。</p>
+        <p class="ncm-sort-detected">当前歌单：${categories.length} 类（${categoryNames}）</p>
       </div>
-      <div class="ncm-sort-date-settings">
+      <label class="ncm-sort-select-row">
+        <span class="ncm-sort-label">歌手名称规则：</span>
+        <select id="artist-text-source" class="ncm-sort-select">
+          <option value="title" ${artistConfig.useTitleSortConfig ? 'selected' : ''}>跟随标题排序规则</option>
+          <option value="custom" ${artistConfig.useTitleSortConfig ? '' : 'selected'}>使用歌手专用规则</option>
+        </select>
+      </label>
+      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel ${artistConfig.useTitleSortConfig ? 'is-disabled' : ''}" ${artistConfig.useTitleSortConfig ? 'disabled' : ''}>
+        <legend>歌手专用文字规则</legend>
+        <p class="ncm-sort-help">仅在选择“使用歌手专用规则”时生效。越靠上优先级越高。</p>
         <label class="ncm-sort-switch-row">
-          <input id="artist-sort-name" type="checkbox" checked>
+          <input id="artist-direct-compare" type="checkbox" ${customTextConfig.directStringCompare ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
-            <span class="ncm-sort-switch-label">歌手按名称首字母排序</span>
-            <span class="ncm-sort-switch-help">关闭后保持处理前歌单中的原始顺序。</span>
+            <span class="ncm-sort-switch-label">使用直接字符串比较</span>
+            <span class="ncm-sort-switch-help">开启后不使用下面的文字体系优先级。</span>
           </span>
         </label>
-        <label id="artist-sort-date-row" class="ncm-sort-switch-row is-disabled">
-          <input id="artist-sort-date" type="checkbox" disabled>
+        <fieldset id="artist-category-priority" class="ncm-sort-priority-panel">
+          <legend>文字体系优先级</legend>
+          <ol id="artist-priority-list" class="ncm-sort-priority-list">
+            ${createTitleCategoryList(customCategories)}
+          </ol>
+          <label class="ncm-sort-select-row">
+            <span class="ncm-sort-label">汉字排序方式：</span>
+            <select id="artist-chinese-sort" class="ncm-sort-select">
+              ${TITLE_CHINESE_SORTS.map(sort => `
+                <option value="${sort.id}" ${sort.id === customTextConfig.chineseSort ? 'selected' : ''}>
+                  ${sort.label}
+                </option>
+              `).join('')}
+            </select>
+          </label>
+        </fieldset>
+      </fieldset>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-name" type="checkbox" ${artistConfig.sortArtistsByName ? 'checked' : ''}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">按歌手名称排序</span>
+            <span class="ncm-sort-switch-help">关闭后歌手分组按照原歌单中首次出现的顺序排列。</span>
+          </span>
+        </label>
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-date" type="checkbox" ${artistConfig.sortSameArtistByDate ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">同一歌手按发行时间排序</span>
-            <span class="ncm-sort-switch-help">开启后同一歌手内按发行日期排列，日期相同时沿用发行日期排序的标题兜底规则。</span>
+            <span class="ncm-sort-switch-help">关闭后保持同一歌手的原歌单相对顺序。</span>
           </span>
         </label>
       </div>
-      <div id="artist-date-order-settings" class="ncm-sort-date-order is-disabled">
-        <p class="ncm-sort-label">同一歌手内的发行时间方向：</p>
-        <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button is-selected" data-artist-date-order data-descending="true" aria-pressed="true" disabled>从新到旧（倒序）</button>
-          <button type="button" class="ncm-sort-choice-button" data-artist-date-order data-descending="false" aria-pressed="false" disabled>从旧到新（顺序）</button>
-        </div>
-      </div>
+      <p class="ncm-sort-detected">同歌手发行日期规则：${dateConfig.descending ? '从新到旧' : '从旧到新'}${dateConfig.sortAlbumsByName ? '，日期相同时按专辑名称' : ''}${dateConfig.sortAlbumTracks ? '及专辑内曲目顺序' : ''}（与“按发行日期排序”共享）</p>
     `,
     showConfirmButton: true,
     showCancelButton: true,
@@ -302,29 +343,38 @@ export function showArtistSortDialog() {
     cancelButtonText: '取消',
     customClass: swalClasses,
     didOpen: () => {
-      const artistSort = document.getElementById('artist-sort-name');
-      const dateSort = document.getElementById('artist-sort-date');
-      const orderButtons = [...document.querySelectorAll('[data-artist-date-order]')];
+      const textSource = document.getElementById('artist-text-source');
+      const directCompare = document.getElementById('artist-direct-compare');
+      const list = document.getElementById('artist-priority-list');
 
-      artistSort.addEventListener('change', () => {
-        setArtistDateSortDisabled(!artistSort.checked);
+      textSource.addEventListener('change', () => {
+        setArtistTextConfigDisabled(textSource.value === 'title');
       });
 
-      dateSort.addEventListener('change', () => {
-        setArtistDateOrderDisabled(!dateSort.checked);
+      directCompare.addEventListener('change', () => {
+        setPriorityDisabled(directCompare.checked, 'artist');
       });
 
-      orderButtons.forEach((button) => {
-        button.addEventListener('click', () => {
-          orderButtons.forEach((item) => {
-            const selected = item === button;
-            item.classList.toggle('is-selected', selected);
-            item.setAttribute('aria-pressed', String(selected));
-          });
-        });
+      list.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-move]');
+        if (!button) return;
+
+        const item = button.closest('.ncm-sort-priority-item');
+        const sibling = button.dataset.move === 'up'
+          ? item.previousElementSibling
+          : item.nextElementSibling;
+        if (!sibling) return;
+
+        if (button.dataset.move === 'up') {
+          list.insertBefore(item, sibling);
+        } else {
+          list.insertBefore(sibling, item);
+        }
+        refreshPriorityIndexes(list);
       });
 
-      setArtistDateSortDisabled(false);
+      setPriorityDisabled(directCompare.checked, 'artist');
+      setArtistTextConfigDisabled(textSource.value === 'title');
     },
     preConfirm: () => readArtistSortConfig()
   });

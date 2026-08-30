@@ -3,6 +3,7 @@ import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { ensurePublishTimes } from '../data/publish-time.js';
 import { cmpByDate } from '../sort/date.js';
+import { saveDateSortSettings } from '../settings/date-sort.js';
 import { showDateSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
 
@@ -10,6 +11,7 @@ export async function sortByPublishDate(pid) {
   const result = await showDateSortDialog();
   if (!result.isConfirmed) return;
 
+  await saveDateSortSettings(result.value);
   await performDateSort(pid, result.value.descending, result.value);
 }
 

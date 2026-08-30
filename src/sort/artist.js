@@ -3,8 +3,7 @@ import { cmpByDate } from './date.js';
 
 export const DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
   sortArtistsByName: true,
-  sortSameArtistByDate: false,
-  descending: true
+  sortSameArtistByDate: false
 });
 
 export function normalizeArtistSortConfig(config = DEFAULT_ARTIST_SORT_CONFIG) {
@@ -15,38 +14,39 @@ export function normalizeArtistSortConfig(config = DEFAULT_ARTIST_SORT_CONFIG) {
 
   return {
     sortArtistsByName,
-    sortSameArtistByDate: sortArtistsByName && Boolean(source.sortSameArtistByDate),
-    descending: source.descending !== false
+    sortSameArtistByDate: Boolean(source.sortSameArtistByDate)
   };
 }
 
-export function createArtistComparator(
-  config = DEFAULT_ARTIST_SORT_CONFIG,
-  titleSortConfig
-) {
+export function sortSongsByArtist(items, config, textSortConfig, dateSortConfig) {
   const normalizedConfig = normalizeArtistSortConfig(config);
-  const compareArtist = createTextComparator(titleSortConfig);
-  const compareDate = cmpByDate(normalizedConfig.descending);
+  const compareArtist = createTextComparator(textSortConfig);
+  const compareDate = cmpByDate(
+    dateSortConfig?.descending !== false,
+    dateSortConfig
+  );
+  const groups = [];
+  const groupsByArtist = new Map();
 
-  return (a, b) => {
-    if (!normalizedConfig.sortArtistsByName) return 0;
-
-    const artistResult = compareArtist(a.artist || '', b.artist || '');
-    if (artistResult) return artistResult;
-
-    if (normalizedConfig.sortSameArtistByDate) {
-      return compareDate(a, b);
+  items.forEach((item, index) => {
+    const artist = item.artist || '';
+    let group = groupsByArtist.get(artist);
+    if (!group) {
+      group = { artist, index, items: [] };
+      groupsByArtist.set(artist, group);
+      groups.push(group);
     }
+    group.items.push({ item, index });
+  });
 
-    return 0;
-  };
-}
+  if (normalizedConfig.sortArtistsByName) {
+    groups.sort((a, b) => compareArtist(a.artist, b.artist) || a.index - b.index);
+  }
 
-export function sortSongsByArtist(items, config, titleSortConfig) {
-  const compare = createArtistComparator(config, titleSortConfig);
-
-  return items
-    .map((item, index) => ({ item, index }))
-    .sort((a, b) => compare(a.item, b.item) || a.index - b.index)
-    .map(({ item }) => item);
+  return groups.flatMap(group => {
+    if (normalizedConfig.sortSameArtistByDate) {
+      group.items.sort((a, b) => compareDate(a.item, b.item) || a.index - b.index);
+    }
+    return group.items.map(({ item }) => item);
+  });
 }

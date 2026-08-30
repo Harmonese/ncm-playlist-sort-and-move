@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.4
+// @version      0.5.5
 // @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -254,15 +254,18 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (/\p{Script=Arabic}/u.test(character)) return "arabic";
     return "other";
   }
-  function detectTitleCategoryIds(items = []) {
+  function detectTextCategoryIds(texts = []) {
     const detected = /* @__PURE__ */ new Set();
-    for (const item of items) {
-      for (const character of Array.from(item.title || "")) {
+    for (const text of texts) {
+      for (const character of Array.from(text || "")) {
         detected.add(classifyCharacter(character));
       }
     }
     if (!detected.size) detected.add("other");
     return TITLE_CATEGORIES.filter((category) => detected.has(category.id)).map((category) => category.id);
+  }
+  function detectTitleCategoryIds(items = []) {
+    return detectTextCategoryIds(items.map((item) => item.title || ""));
   }
   function compareUnicodeCharacters(a, b) {
     return (a.codePointAt(0) || 0) - (b.codePointAt(0) || 0);
@@ -353,41 +356,39 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
   var cmpByTitle = createTitleComparator();
 
-  // src/settings/title-sort.js
-  var TITLE_SORT_SETTINGS_KEY = "ncm-playlist-sort:title-sort-config";
-  function readStoredValue() {
+  // src/settings/storage.js
+  function readStoredValue(key) {
     if (typeof globalThis.GM_getValue === "function") {
-      return globalThis.GM_getValue(TITLE_SORT_SETTINGS_KEY, null);
+      return globalThis.GM_getValue(key, null);
     }
     if (typeof globalThis.GM?.getValue === "function") {
-      return globalThis.GM.getValue(TITLE_SORT_SETTINGS_KEY, null);
+      return globalThis.GM.getValue(key, null);
     }
     if (globalThis.localStorage) {
-      const raw = globalThis.localStorage.getItem(TITLE_SORT_SETTINGS_KEY);
+      const raw = globalThis.localStorage.getItem(key);
       return raw ? JSON.parse(raw) : null;
     }
     return null;
   }
-  function writeStoredValue(value) {
+  function writeStoredValue(key, value) {
     if (typeof globalThis.GM_setValue === "function") {
-      return Promise.resolve(
-        globalThis.GM_setValue(TITLE_SORT_SETTINGS_KEY, value)
-      ).then(() => true);
+      return Promise.resolve(globalThis.GM_setValue(key, value)).then(() => true);
     }
     if (typeof globalThis.GM?.setValue === "function") {
-      return Promise.resolve(
-        globalThis.GM.setValue(TITLE_SORT_SETTINGS_KEY, value)
-      ).then(() => true);
+      return Promise.resolve(globalThis.GM.setValue(key, value)).then(() => true);
     }
     if (globalThis.localStorage) {
-      globalThis.localStorage.setItem(TITLE_SORT_SETTINGS_KEY, JSON.stringify(value));
+      globalThis.localStorage.setItem(key, JSON.stringify(value));
       return true;
     }
     return false;
   }
+
+  // src/settings/title-sort.js
+  var TITLE_SORT_SETTINGS_KEY = "ncm-playlist-sort:title-sort-config";
   async function loadTitleSortConfig() {
     try {
-      const stored = await Promise.resolve(readStoredValue());
+      const stored = await Promise.resolve(readStoredValue(TITLE_SORT_SETTINGS_KEY));
       return normalizeTitleSortConfig(stored);
     } catch (error) {
       console.warn("[NCM-SORT] \u8BFB\u53D6\u6807\u9898\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u8BBE\u7F6E", error);
@@ -397,7 +398,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   async function saveTitleSortConfig(config) {
     const normalized = normalizeTitleSortConfig(config);
     try {
-      return await Promise.resolve(writeStoredValue(normalized));
+      return await Promise.resolve(writeStoredValue(TITLE_SORT_SETTINGS_KEY, normalized));
     } catch (error) {
       console.warn("[NCM-SORT] \u4FDD\u5B58\u6807\u9898\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
       return false;
@@ -927,6 +928,175 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   `);
   }
 
+  // src/sort/date.js
+  var collator2 = new Intl.Collator(void 0, {
+    numeric: false,
+    sensitivity: "base",
+    usage: "sort"
+  });
+  var DEFAULT_DATE_SORT_CONFIG = Object.freeze({
+    sortAlbumsByName: false,
+    sortAlbumTracks: false
+  });
+  function normalizeDateSortConfig(config = DEFAULT_DATE_SORT_CONFIG) {
+    const source = config && typeof config === "object" ? config : DEFAULT_DATE_SORT_CONFIG;
+    const sortAlbumsByName = Boolean(source.sortAlbumsByName);
+    return {
+      sortAlbumsByName,
+      sortAlbumTracks: sortAlbumsByName && Boolean(source.sortAlbumTracks)
+    };
+  }
+  function compareAlbumTrackOrder(a, b) {
+    const discA = a.albumDiscNo || 0;
+    const discB = b.albumDiscNo || 0;
+    if (discA !== discB) {
+      if (!discA) return 1;
+      if (!discB) return -1;
+      return discA - discB;
+    }
+    const trackA = a.albumTrackNo || 0;
+    const trackB = b.albumTrackNo || 0;
+    if (trackA !== trackB) {
+      if (!trackA) return 1;
+      if (!trackB) return -1;
+      return trackA - trackB;
+    }
+    return 0;
+  }
+  function isSameAlbum(a, b) {
+    if (a.albumId && b.albumId) return a.albumId === b.albumId;
+    return (a.album || "") === (b.album || "");
+  }
+  function cmpByDate(descending, config = DEFAULT_DATE_SORT_CONFIG) {
+    const normalizedConfig = normalizeDateSortConfig(config);
+    return (a, b) => {
+      const timeA = a.publishTime || 0;
+      const timeB = b.publishTime || 0;
+      if (timeA !== timeB) {
+        return descending ? timeB - timeA : timeA - timeB;
+      }
+      if (normalizedConfig.sortAlbumsByName) {
+        const albumResult = collator2.compare(a.album || "", b.album || "");
+        if (albumResult) return albumResult;
+        if (normalizedConfig.sortAlbumTracks && isSameAlbum(a, b)) {
+          const trackResult = compareAlbumTrackOrder(a, b);
+          if (trackResult) return trackResult;
+        }
+      }
+      return cmpByTitle(a, b);
+    };
+  }
+
+  // src/sort/artist.js
+  var DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
+    sortArtistsByName: true,
+    sortSameArtistByDate: false
+  });
+  function normalizeArtistSortConfig(config = DEFAULT_ARTIST_SORT_CONFIG) {
+    const source = config && typeof config === "object" ? config : DEFAULT_ARTIST_SORT_CONFIG;
+    const sortArtistsByName = source.sortArtistsByName !== false;
+    return {
+      sortArtistsByName,
+      sortSameArtistByDate: Boolean(source.sortSameArtistByDate)
+    };
+  }
+  function sortSongsByArtist(items, config, textSortConfig, dateSortConfig) {
+    const normalizedConfig = normalizeArtistSortConfig(config);
+    const compareArtist = createTextComparator(textSortConfig);
+    const compareDate = cmpByDate(
+      dateSortConfig?.descending !== false,
+      dateSortConfig
+    );
+    const groups = [];
+    const groupsByArtist = /* @__PURE__ */ new Map();
+    items.forEach((item, index) => {
+      const artist = item.artist || "";
+      let group = groupsByArtist.get(artist);
+      if (!group) {
+        group = { artist, index, items: [] };
+        groupsByArtist.set(artist, group);
+        groups.push(group);
+      }
+      group.items.push({ item, index });
+    });
+    if (normalizedConfig.sortArtistsByName) {
+      groups.sort((a, b) => compareArtist(a.artist, b.artist) || a.index - b.index);
+    }
+    return groups.flatMap((group) => {
+      if (normalizedConfig.sortSameArtistByDate) {
+        group.items.sort((a, b) => compareDate(a.item, b.item) || a.index - b.index);
+      }
+      return group.items.map(({ item }) => item);
+    });
+  }
+
+  // src/settings/artist-sort.js
+  var ARTIST_SORT_SETTINGS_KEY = "ncm-playlist-sort:artist-sort-config";
+  var DEFAULT_ARTIST_SORT_SETTINGS = Object.freeze({
+    ...DEFAULT_ARTIST_SORT_CONFIG,
+    useTitleSortConfig: true,
+    customTextConfig: DEFAULT_TITLE_SORT_CONFIG
+  });
+  function normalizeArtistSortSettings(settings = DEFAULT_ARTIST_SORT_SETTINGS) {
+    const source = settings && typeof settings === "object" ? settings : DEFAULT_ARTIST_SORT_SETTINGS;
+    const artistConfig = normalizeArtistSortConfig(source);
+    return {
+      ...artistConfig,
+      useTitleSortConfig: source.useTitleSortConfig !== false,
+      customTextConfig: normalizeTitleSortConfig(source.customTextConfig)
+    };
+  }
+  async function loadArtistSortSettings() {
+    try {
+      const stored = await Promise.resolve(readStoredValue(ARTIST_SORT_SETTINGS_KEY));
+      return normalizeArtistSortSettings(stored);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u6B4C\u624B\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u8BBE\u7F6E", error);
+      return normalizeArtistSortSettings(DEFAULT_ARTIST_SORT_SETTINGS);
+    }
+  }
+  async function saveArtistSortSettings(settings) {
+    const normalized = normalizeArtistSortSettings(settings);
+    try {
+      return await Promise.resolve(writeStoredValue(ARTIST_SORT_SETTINGS_KEY, normalized));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u6B4C\u624B\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
+      return false;
+    }
+  }
+
+  // src/settings/date-sort.js
+  var DATE_SORT_SETTINGS_KEY = "ncm-playlist-sort:date-sort-config";
+  var DEFAULT_DATE_SORT_SETTINGS = Object.freeze({
+    descending: true,
+    ...DEFAULT_DATE_SORT_CONFIG
+  });
+  function normalizeDateSortSettings(settings = DEFAULT_DATE_SORT_SETTINGS) {
+    const source = settings && typeof settings === "object" ? settings : DEFAULT_DATE_SORT_SETTINGS;
+    return {
+      descending: source.descending !== false,
+      ...normalizeDateSortConfig(source)
+    };
+  }
+  async function loadDateSortSettings() {
+    try {
+      const stored = await Promise.resolve(readStoredValue(DATE_SORT_SETTINGS_KEY));
+      return normalizeDateSortSettings(stored);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u8BBE\u7F6E", error);
+      return normalizeDateSortSettings(DEFAULT_DATE_SORT_SETTINGS);
+    }
+  }
+  async function saveDateSortSettings(settings) {
+    const normalized = normalizeDateSortSettings(settings);
+    try {
+      return await Promise.resolve(writeStoredValue(DATE_SORT_SETTINGS_KEY, normalized));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
+      return false;
+    }
+  }
+
   // src/ui/dialogs.js
   function getVisibleTitleCategories(categoryIds) {
     const requestedIds = Array.isArray(categoryIds) ? new Set(categoryIds) : new Set(TITLE_CATEGORIES.map((category) => category.id));
@@ -961,23 +1131,26 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     </li>
   `).join("");
   }
-  function readTitleSortConfig() {
-    const list = document.querySelector(".ncm-sort-priority-list");
-    const directStringCompare = document.getElementById("title-direct-compare").checked;
-    const chineseSort = document.getElementById("title-chinese-sort").value;
+  function readTextSortConfig(prefix) {
+    const list = document.getElementById(`${prefix}-priority-list`);
+    const directStringCompare = document.getElementById(`${prefix}-direct-compare`).checked;
+    const chineseSort = document.getElementById(`${prefix}-chinese-sort`).value;
     return {
       directStringCompare,
       categoryOrder: [...list.querySelectorAll("[data-category]")].map((item) => item.dataset.category),
       chineseSort
     };
   }
+  function readTitleSortConfig() {
+    return readTextSortConfig("title");
+  }
   function refreshPriorityIndexes(list) {
     [...list.querySelectorAll(".ncm-sort-priority-item")].forEach((item, index) => {
       item.querySelector(".ncm-sort-priority-index").textContent = index + 1;
     });
   }
-  function setPriorityDisabled(disabled) {
-    const fieldset = document.getElementById("title-category-priority");
+  function setPriorityDisabled(disabled, prefix = "title") {
+    const fieldset = document.getElementById(`${prefix}-category-priority`);
     fieldset.disabled = disabled;
     fieldset.classList.toggle("is-disabled", disabled);
   }
@@ -997,28 +1170,17 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     row.classList.toggle("is-disabled", disabled);
   }
   function readArtistSortConfig() {
-    const selectedOrder = document.querySelector("[data-artist-date-order].is-selected");
     return {
       sortArtistsByName: document.getElementById("artist-sort-name").checked,
       sortSameArtistByDate: document.getElementById("artist-sort-date").checked,
-      descending: selectedOrder?.dataset.descending !== "false"
+      useTitleSortConfig: document.getElementById("artist-text-source").value === "title",
+      customTextConfig: readTextSortConfig("artist")
     };
   }
-  function setArtistDateOrderDisabled(disabled) {
-    const container = document.getElementById("artist-date-order-settings");
-    const buttons = [...document.querySelectorAll("[data-artist-date-order]")];
-    buttons.forEach((button) => {
-      button.disabled = disabled;
-    });
-    container.classList.toggle("is-disabled", disabled);
-  }
-  function setArtistDateSortDisabled(disabled) {
-    const input = document.getElementById("artist-sort-date");
-    const row = document.getElementById("artist-sort-date-row");
-    input.disabled = disabled;
-    if (disabled) input.checked = false;
-    row.classList.toggle("is-disabled", disabled);
-    setArtistDateOrderDisabled(disabled || !input.checked);
+  function setArtistTextConfigDisabled(disabled) {
+    const fieldset = document.getElementById("artist-text-settings");
+    fieldset.disabled = disabled;
+    fieldset.classList.toggle("is-disabled", disabled);
   }
   async function showTitleSortDialog(categoryIds) {
     const savedConfig = await loadTitleSortConfig();
@@ -1048,7 +1210,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
           <legend>\u5B57\u7B26\u7C7B\u522B\u4F18\u5148\u7EA7</legend>
           <p class="ncm-sort-help">\u4EC5\u663E\u793A\u5F53\u524D\u6B4C\u5355\u51FA\u73B0\u7684\u7C7B\u522B\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\uFF0C\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
-          <ol class="ncm-sort-priority-list">
+          <ol id="title-priority-list" class="ncm-sort-priority-list">
             ${createTitleCategoryList(categories)}
           </ol>
           <label class="ncm-sort-select-row">
@@ -1093,7 +1255,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       preConfirm: () => readTitleSortConfig()
     });
   }
-  function showDateSortDialog() {
+  async function showDateSortDialog() {
+    const savedConfig = await loadDateSortSettings();
     return Swal.fire({
       title: "\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F",
       html: `
@@ -1103,21 +1266,21 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       </div>
       <div class="ncm-sort-date-order">
         <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button is-selected" data-date-order data-descending="true" aria-pressed="true">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
-          <button type="button" class="ncm-sort-choice-button" data-date-order data-descending="false" aria-pressed="false">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+          <button type="button" class="ncm-sort-choice-button ${savedConfig.descending ? "is-selected" : ""}" data-date-order data-descending="true" aria-pressed="${savedConfig.descending}">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+          <button type="button" class="ncm-sort-choice-button ${savedConfig.descending ? "" : "is-selected"}" data-date-order data-descending="false" aria-pressed="${!savedConfig.descending}">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
         </div>
       </div>
       <div class="ncm-sort-date-settings">
         <label class="ncm-sort-switch-row">
-          <input id="date-sort-albums" type="checkbox">
+          <input id="date-sort-albums" type="checkbox" ${savedConfig.sortAlbumsByName ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">\u4E0D\u540C\u4E13\u8F91\u6309\u4E13\u8F91\u540D\u79F0\u6392\u5E8F</span>
             <span class="ncm-sort-switch-help">\u5C06\u540C\u4E00\u53D1\u884C\u65E5\u671F\u4E0B\u7684\u6B4C\u66F2\u6309\u4E13\u8F91\u540D\u79F0\u805A\u62E2\u3002</span>
           </span>
         </label>
-        <label id="date-sort-tracks-row" class="ncm-sort-switch-row is-disabled">
-          <input id="date-sort-tracks" type="checkbox" disabled>
+        <label id="date-sort-tracks-row" class="ncm-sort-switch-row ${savedConfig.sortAlbumsByName ? "" : "is-disabled"}">
+          <input id="date-sort-tracks" type="checkbox" ${savedConfig.sortAlbumTracks ? "checked" : ""} ${savedConfig.sortAlbumsByName ? "" : "disabled"}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">\u540C\u4E00\u4E13\u8F91\u6309\u4E13\u8F91\u5185\u6B4C\u66F2\u987A\u5E8F\u6392\u5E8F</span>
@@ -1146,43 +1309,85 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         albumSort.addEventListener("change", () => {
           setDateTrackSortDisabled(!albumSort.checked);
         });
+        setDateTrackSortDisabled(!albumSort.checked);
       },
       preConfirm: () => readDateSortConfig()
     });
   }
-  function showArtistSortDialog() {
+  async function showArtistSortDialog(categoryIds, savedSettings) {
+    const artistConfig = savedSettings || await loadArtistSortSettings();
+    const titleConfig = await loadTitleSortConfig();
+    const dateConfig = await loadDateSortSettings();
+    const customTextConfig = artistConfig.customTextConfig;
+    const visibleCategories = getVisibleTitleCategories(categoryIds);
+    const categories = orderTitleCategories(
+      visibleCategories,
+      artistConfig.useTitleSortConfig ? titleConfig.categoryOrder : customTextConfig.categoryOrder
+    );
+    const customCategories = orderTitleCategories(visibleCategories, customTextConfig.categoryOrder);
+    const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
       title: "\u6309\u6B4C\u624B\u6392\u5E8F",
       html: `
       <div class="ncm-sort-intro">
         <p>\u9009\u62E9\u6B4C\u624B\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
-        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u590D\u7528\u6807\u9898\u6392\u5E8F\u4E2D\u7684\u6587\u5B57\u4F53\u7CFB\u3001\u7C7B\u522B\u4F18\u5148\u7EA7\u548C\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\u3002</p>
+        <p class="ncm-sort-help">\u6B4C\u624B\u540D\u79F0\u4F1A\u4ECE\u5DE6\u5230\u53F3\u6BD4\u8F83\u3002\u6587\u5B57\u89C4\u5219\u53EF\u4EE5\u8DDF\u968F\u6807\u9898\uFF0C\u4E5F\u53EF\u4EE5\u5355\u72EC\u8BBE\u7F6E\u3002</p>
+        <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
       </div>
-      <div class="ncm-sort-date-settings">
+      <label class="ncm-sort-select-row">
+        <span class="ncm-sort-label">\u6B4C\u624B\u540D\u79F0\u89C4\u5219\uFF1A</span>
+        <select id="artist-text-source" class="ncm-sort-select">
+          <option value="title" ${artistConfig.useTitleSortConfig ? "selected" : ""}>\u8DDF\u968F\u6807\u9898\u6392\u5E8F\u89C4\u5219</option>
+          <option value="custom" ${artistConfig.useTitleSortConfig ? "" : "selected"}>\u4F7F\u7528\u6B4C\u624B\u4E13\u7528\u89C4\u5219</option>
+        </select>
+      </label>
+      <fieldset id="artist-text-settings" class="ncm-sort-priority-panel ${artistConfig.useTitleSortConfig ? "is-disabled" : ""}" ${artistConfig.useTitleSortConfig ? "disabled" : ""}>
+        <legend>\u6B4C\u624B\u4E13\u7528\u6587\u5B57\u89C4\u5219</legend>
+        <p class="ncm-sort-help">\u4EC5\u5728\u9009\u62E9\u201C\u4F7F\u7528\u6B4C\u624B\u4E13\u7528\u89C4\u5219\u201D\u65F6\u751F\u6548\u3002\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002</p>
         <label class="ncm-sort-switch-row">
-          <input id="artist-sort-name" type="checkbox" checked>
+          <input id="artist-direct-compare" type="checkbox" ${customTextConfig.directStringCompare ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
-            <span class="ncm-sort-switch-label">\u6B4C\u624B\u6309\u540D\u79F0\u9996\u5B57\u6BCD\u6392\u5E8F</span>
-            <span class="ncm-sort-switch-help">\u5173\u95ED\u540E\u4FDD\u6301\u5904\u7406\u524D\u6B4C\u5355\u4E2D\u7684\u539F\u59CB\u987A\u5E8F\u3002</span>
+            <span class="ncm-sort-switch-label">\u4F7F\u7528\u76F4\u63A5\u5B57\u7B26\u4E32\u6BD4\u8F83</span>
+            <span class="ncm-sort-switch-help">\u5F00\u542F\u540E\u4E0D\u4F7F\u7528\u4E0B\u9762\u7684\u6587\u5B57\u4F53\u7CFB\u4F18\u5148\u7EA7\u3002</span>
           </span>
         </label>
-        <label id="artist-sort-date-row" class="ncm-sort-switch-row is-disabled">
-          <input id="artist-sort-date" type="checkbox" disabled>
+        <fieldset id="artist-category-priority" class="ncm-sort-priority-panel">
+          <legend>\u6587\u5B57\u4F53\u7CFB\u4F18\u5148\u7EA7</legend>
+          <ol id="artist-priority-list" class="ncm-sort-priority-list">
+            ${createTitleCategoryList(customCategories)}
+          </ol>
+          <label class="ncm-sort-select-row">
+            <span class="ncm-sort-label">\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\uFF1A</span>
+            <select id="artist-chinese-sort" class="ncm-sort-select">
+              ${TITLE_CHINESE_SORTS.map((sort) => `
+                <option value="${sort.id}" ${sort.id === customTextConfig.chineseSort ? "selected" : ""}>
+                  ${sort.label}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        </fieldset>
+      </fieldset>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-name" type="checkbox" ${artistConfig.sortArtistsByName ? "checked" : ""}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u6309\u6B4C\u624B\u540D\u79F0\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u5173\u95ED\u540E\u6B4C\u624B\u5206\u7EC4\u6309\u7167\u539F\u6B4C\u5355\u4E2D\u9996\u6B21\u51FA\u73B0\u7684\u987A\u5E8F\u6392\u5217\u3002</span>
+          </span>
+        </label>
+        <label class="ncm-sort-switch-row">
+          <input id="artist-sort-date" type="checkbox" ${artistConfig.sortSameArtistByDate ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">\u540C\u4E00\u6B4C\u624B\u6309\u53D1\u884C\u65F6\u95F4\u6392\u5E8F</span>
-            <span class="ncm-sort-switch-help">\u5F00\u542F\u540E\u540C\u4E00\u6B4C\u624B\u5185\u6309\u53D1\u884C\u65E5\u671F\u6392\u5217\uFF0C\u65E5\u671F\u76F8\u540C\u65F6\u6CBF\u7528\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u7684\u6807\u9898\u515C\u5E95\u89C4\u5219\u3002</span>
+            <span class="ncm-sort-switch-help">\u5173\u95ED\u540E\u4FDD\u6301\u540C\u4E00\u6B4C\u624B\u7684\u539F\u6B4C\u5355\u76F8\u5BF9\u987A\u5E8F\u3002</span>
           </span>
         </label>
       </div>
-      <div id="artist-date-order-settings" class="ncm-sort-date-order is-disabled">
-        <p class="ncm-sort-label">\u540C\u4E00\u6B4C\u624B\u5185\u7684\u53D1\u884C\u65F6\u95F4\u65B9\u5411\uFF1A</p>
-        <div class="ncm-sort-choice-list">
-          <button type="button" class="ncm-sort-choice-button is-selected" data-artist-date-order data-descending="true" aria-pressed="true" disabled>\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
-          <button type="button" class="ncm-sort-choice-button" data-artist-date-order data-descending="false" aria-pressed="false" disabled>\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
-        </div>
-      </div>
+      <p class="ncm-sort-detected">\u540C\u6B4C\u624B\u53D1\u884C\u65E5\u671F\u89C4\u5219\uFF1A${dateConfig.descending ? "\u4ECE\u65B0\u5230\u65E7" : "\u4ECE\u65E7\u5230\u65B0"}${dateConfig.sortAlbumsByName ? "\uFF0C\u65E5\u671F\u76F8\u540C\u65F6\u6309\u4E13\u8F91\u540D\u79F0" : ""}${dateConfig.sortAlbumTracks ? "\u53CA\u4E13\u8F91\u5185\u66F2\u76EE\u987A\u5E8F" : ""}\uFF08\u4E0E\u201C\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\u201D\u5171\u4EAB\uFF09</p>
     `,
       showConfirmButton: true,
       showCancelButton: true,
@@ -1190,25 +1395,30 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       cancelButtonText: "\u53D6\u6D88",
       customClass: swalClasses,
       didOpen: () => {
-        const artistSort = document.getElementById("artist-sort-name");
-        const dateSort = document.getElementById("artist-sort-date");
-        const orderButtons = [...document.querySelectorAll("[data-artist-date-order]")];
-        artistSort.addEventListener("change", () => {
-          setArtistDateSortDisabled(!artistSort.checked);
+        const textSource = document.getElementById("artist-text-source");
+        const directCompare = document.getElementById("artist-direct-compare");
+        const list = document.getElementById("artist-priority-list");
+        textSource.addEventListener("change", () => {
+          setArtistTextConfigDisabled(textSource.value === "title");
         });
-        dateSort.addEventListener("change", () => {
-          setArtistDateOrderDisabled(!dateSort.checked);
+        directCompare.addEventListener("change", () => {
+          setPriorityDisabled(directCompare.checked, "artist");
         });
-        orderButtons.forEach((button) => {
-          button.addEventListener("click", () => {
-            orderButtons.forEach((item) => {
-              const selected = item === button;
-              item.classList.toggle("is-selected", selected);
-              item.setAttribute("aria-pressed", String(selected));
-            });
-          });
+        list.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-move]");
+          if (!button) return;
+          const item = button.closest(".ncm-sort-priority-item");
+          const sibling = button.dataset.move === "up" ? item.previousElementSibling : item.nextElementSibling;
+          if (!sibling) return;
+          if (button.dataset.move === "up") {
+            list.insertBefore(item, sibling);
+          } else {
+            list.insertBefore(sibling, item);
+          }
+          refreshPriorityIndexes(list);
         });
-        setArtistDateSortDisabled(false);
+        setPriorityDisabled(directCompare.checked, "artist");
+        setArtistTextConfigDisabled(textSource.value === "title");
       },
       preConfirm: () => readArtistSortConfig()
     });
@@ -1385,69 +1595,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
   }
 
-  // src/sort/date.js
-  var collator2 = new Intl.Collator(void 0, {
-    numeric: false,
-    sensitivity: "base",
-    usage: "sort"
-  });
-  var DEFAULT_DATE_SORT_CONFIG = Object.freeze({
-    sortAlbumsByName: false,
-    sortAlbumTracks: false
-  });
-  function normalizeDateSortConfig(config = DEFAULT_DATE_SORT_CONFIG) {
-    const source = config && typeof config === "object" ? config : DEFAULT_DATE_SORT_CONFIG;
-    const sortAlbumsByName = Boolean(source.sortAlbumsByName);
-    return {
-      sortAlbumsByName,
-      sortAlbumTracks: sortAlbumsByName && Boolean(source.sortAlbumTracks)
-    };
-  }
-  function compareAlbumTrackOrder(a, b) {
-    const discA = a.albumDiscNo || 0;
-    const discB = b.albumDiscNo || 0;
-    if (discA !== discB) {
-      if (!discA) return 1;
-      if (!discB) return -1;
-      return discA - discB;
-    }
-    const trackA = a.albumTrackNo || 0;
-    const trackB = b.albumTrackNo || 0;
-    if (trackA !== trackB) {
-      if (!trackA) return 1;
-      if (!trackB) return -1;
-      return trackA - trackB;
-    }
-    return 0;
-  }
-  function isSameAlbum(a, b) {
-    if (a.albumId && b.albumId) return a.albumId === b.albumId;
-    return (a.album || "") === (b.album || "");
-  }
-  function cmpByDate(descending, config = DEFAULT_DATE_SORT_CONFIG) {
-    const normalizedConfig = normalizeDateSortConfig(config);
-    return (a, b) => {
-      const timeA = a.publishTime || 0;
-      const timeB = b.publishTime || 0;
-      if (timeA !== timeB) {
-        return descending ? timeB - timeA : timeA - timeB;
-      }
-      if (normalizedConfig.sortAlbumsByName) {
-        const albumResult = collator2.compare(a.album || "", b.album || "");
-        if (albumResult) return albumResult;
-        if (normalizedConfig.sortAlbumTracks && isSameAlbum(a, b)) {
-          const trackResult = compareAlbumTrackOrder(a, b);
-          if (trackResult) return trackResult;
-        }
-      }
-      return cmpByTitle(a, b);
-    };
-  }
-
   // src/operations/sort-by-date.js
   async function sortByPublishDate(pid) {
     const result = await showDateSortDialog();
     if (!result.isConfirmed) return;
+    await saveDateSortSettings(result.value);
     await performDateSort(pid, result.value.descending, result.value);
   }
   async function performDateSort(pid, descending, dateSortConfig) {
@@ -1488,53 +1640,29 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
   }
 
-  // src/sort/artist.js
-  var DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
-    sortArtistsByName: true,
-    sortSameArtistByDate: false,
-    descending: true
-  });
-  function normalizeArtistSortConfig(config = DEFAULT_ARTIST_SORT_CONFIG) {
-    const source = config && typeof config === "object" ? config : DEFAULT_ARTIST_SORT_CONFIG;
-    const sortArtistsByName = source.sortArtistsByName !== false;
-    return {
-      sortArtistsByName,
-      sortSameArtistByDate: sortArtistsByName && Boolean(source.sortSameArtistByDate),
-      descending: source.descending !== false
-    };
-  }
-  function createArtistComparator(config = DEFAULT_ARTIST_SORT_CONFIG, titleSortConfig) {
-    const normalizedConfig = normalizeArtistSortConfig(config);
-    const compareArtist = createTextComparator(titleSortConfig);
-    const compareDate = cmpByDate(normalizedConfig.descending);
-    return (a, b) => {
-      if (!normalizedConfig.sortArtistsByName) return 0;
-      const artistResult = compareArtist(a.artist || "", b.artist || "");
-      if (artistResult) return artistResult;
-      if (normalizedConfig.sortSameArtistByDate) {
-        return compareDate(a, b);
-      }
-      return 0;
-    };
-  }
-  function sortSongsByArtist(items, config, titleSortConfig) {
-    const compare = createArtistComparator(config, titleSortConfig);
-    return items.map((item, index) => ({ item, index })).sort((a, b) => compare(a.item, b.item) || a.index - b.index).map(({ item }) => item);
-  }
-
   // src/operations/sort-by-artist.js
   async function sortByArtist(pid) {
-    const result = await showArtistSortDialog();
+    const artistSettings = await loadArtistSortSettings();
+    showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+    const { playlist, items } = await getAllSongs(pid);
+    const categoryIds = detectTextCategoryIds(items.map((item) => item.artist || ""));
+    const result = await showArtistSortDialog(categoryIds, artistSettings);
     if (!result.isConfirmed) return;
     try {
-      showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
-      const { playlist, items } = await getAllSongs(pid);
+      await saveArtistSortSettings(result.value);
       if (result.value.sortSameArtistByDate) {
         await ensurePublishTimes(items);
       }
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
       const titleSortConfig = await loadTitleSortConfig();
-      const orderedItems = sortSongsByArtist(items, result.value, titleSortConfig);
+      const dateSortConfig = await loadDateSortSettings();
+      const textSortConfig = result.value.useTitleSortConfig ? titleSortConfig : result.value.customTextConfig;
+      const orderedItems = sortSongsByArtist(
+        items,
+        result.value,
+        textSortConfig,
+        dateSortConfig
+      );
       const ordered = orderedItems.map((item) => item.id);
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
@@ -1544,7 +1672,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           title: "\u6392\u5E8F\u5B8C\u6210",
           text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
-\u6309\u6B4C\u624B${result.value.sortSameArtistByDate ? "\u53CA\u53D1\u884C\u65E5\u671F" : ""}\u6392\u5217
+\u6309\u6B4C\u624B${result.value.sortSameArtistByDate ? `\u53CA\u53D1\u884C\u65E5\u671F\uFF08${dateSortConfig.descending ? "\u4ECE\u65B0\u5230\u65E7" : "\u4ECE\u65E7\u5230\u65B0"}\uFF09` : ""}\u6392\u5217
 \u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
           customClass: swalClasses
         });

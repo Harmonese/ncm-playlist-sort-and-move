@@ -50,8 +50,7 @@ test('same-artist date sorting uses the selected direction', () => {
   const orderedTitles = sortSongsByArtist(songs, {
     sortArtistsByName: true,
     sortSameArtistByDate: true,
-    descending: false
-  }, titleSortConfig).map(item => item.title);
+  }, titleSortConfig, { descending: false }).map(item => item.title);
 
   assert.deepEqual(orderedTitles, ['Older', 'Middle', 'Newest']);
 });
@@ -114,17 +113,31 @@ test('unknown release times sort after known times in descending mode', () => {
   assert.deepEqual(orderedTitles, ['Known', 'Unknown']);
 });
 
-test('the date option is disabled when artist sorting is disabled', () => {
+test('artist groups keep first-seen order while their contents use date sorting', () => {
+  const songs = [
+    song('Beta old', 1, 'Beta', 100),
+    song('Alpha old', 2, 'Alpha', 100),
+    song('Beta new', 3, 'Beta', 300),
+    song('Alpha new', 4, 'Alpha', 300)
+  ];
+
+  const orderedTitles = sortSongsByArtist(songs, {
+    sortArtistsByName: false,
+    sortSameArtistByDate: true
+  }, titleSortConfig, { descending: true }).map(item => item.title);
+
+  assert.deepEqual(orderedTitles, ['Beta new', 'Beta old', 'Alpha new', 'Alpha old']);
+});
+
+test('artist sorting settings do not silently disable the date option', () => {
   assert.deepEqual(
     normalizeArtistSortConfig({
       sortArtistsByName: false,
-      sortSameArtistByDate: true,
-      descending: false
+      sortSameArtistByDate: true
     }),
     {
       sortArtistsByName: false,
-      sortSameArtistByDate: false,
-      descending: false
+      sortSameArtistByDate: true
     }
   );
 });

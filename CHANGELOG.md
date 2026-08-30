@@ -6,13 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.5] - 2026-08-31
+
 ### Added
 
 - Added artist sorting with reusable title writing-system rules and optional release-date sorting within each artist.
+- Added independent artist text-sorting settings, with an explicit option to follow or separate from title sorting settings.
+- Added shared persistent release-date settings for date sorting and artist sorting.
 
 ### Changed
 
 - Changed release-date sorting to require an explicit “开始排序” confirmation after selecting the direction and optional album ordering.
+- Changed artist sorting so artist group order and within-artist song order can be configured independently.
+- Changed artist sorting labels to describe full artist-name comparison instead of implying that only the first character is compared.
 
 ## [0.5.4] - 2026-08-30
 
