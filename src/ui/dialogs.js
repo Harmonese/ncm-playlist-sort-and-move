@@ -1,9 +1,9 @@
 import { dangerSwalClasses, swalClasses } from './styles.js';
 import {
-  DEFAULT_TITLE_SORT_CONFIG,
   TITLE_CATEGORIES,
   TITLE_CHINESE_SORTS
 } from '../sort/title.js';
+import { loadTitleSortConfig } from '../settings/title-sort.js';
 
 function getVisibleTitleCategories(categoryIds) {
   const requestedIds = Array.isArray(categoryIds)
@@ -14,6 +14,24 @@ function getVisibleTitleCategories(categoryIds) {
   return categories.length
     ? categories
     : [TITLE_CATEGORIES.find(category => category.id === 'other')];
+}
+
+function orderTitleCategories(categories, savedOrder) {
+  const visibleIds = new Set(categories.map(category => category.id));
+  const ordered = [];
+
+  for (const categoryId of savedOrder) {
+    const category = categories.find(item => item.id === categoryId);
+    if (visibleIds.has(categoryId) && category && !ordered.includes(category)) {
+      ordered.push(category);
+    }
+  }
+
+  for (const category of categories) {
+    if (!ordered.includes(category)) ordered.push(category);
+  }
+
+  return ordered;
 }
 
 function createTitleCategoryList(categories) {
@@ -55,8 +73,25 @@ function setPriorityDisabled(disabled) {
   fieldset.classList.toggle('is-disabled', disabled);
 }
 
-export function showTitleSortDialog(categoryIds) {
-  const categories = getVisibleTitleCategories(categoryIds);
+function readDateSortConfig() {
+  return {
+    sortAlbumsByName: document.getElementById('date-sort-albums').checked,
+    sortAlbumTracks: document.getElementById('date-sort-tracks').checked
+  };
+}
+
+function setDateTrackSortDisabled(disabled) {
+  const input = document.getElementById('date-sort-tracks');
+  const row = document.getElementById('date-sort-tracks-row');
+  input.disabled = disabled;
+  if (disabled) input.checked = false;
+  row.classList.toggle('is-disabled', disabled);
+}
+
+export async function showTitleSortDialog(categoryIds) {
+  const savedConfig = await loadTitleSortConfig();
+  const visibleCategories = getVisibleTitleCategories(categoryIds);
+  const categories = orderTitleCategories(visibleCategories, savedConfig.categoryOrder);
   const categoryNames = categories.map(category => category.label).join('、');
 
   return Swal.fire({
@@ -66,11 +101,12 @@ export function showTitleSortDialog(categoryIds) {
         <div class="ncm-sort-intro">
           <p>选择标题的比较方式：</p>
           <p class="ncm-sort-help">关闭直接比较时，脚本会从左到右逐个字符比较。</p>
+          <p class="ncm-sort-help">上次使用的设置会自动恢复。</p>
           <p class="ncm-sort-detected">当前歌单：${categories.length} 类（${categoryNames}）</p>
         </div>
 
         <label class="ncm-sort-switch-row">
-          <input id="title-direct-compare" type="checkbox" ${DEFAULT_TITLE_SORT_CONFIG.directStringCompare ? 'checked' : ''}>
+          <input id="title-direct-compare" type="checkbox" ${savedConfig.directStringCompare ? 'checked' : ''}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">使用直接字符串比较</span>
@@ -88,7 +124,7 @@ export function showTitleSortDialog(categoryIds) {
             <span class="ncm-sort-label">汉字排序方式：</span>
             <select id="title-chinese-sort" class="ncm-sort-select">
               ${TITLE_CHINESE_SORTS.map(sort => `
-                <option value="${sort.id}" ${sort.id === DEFAULT_TITLE_SORT_CONFIG.chineseSort ? 'selected' : ''}>
+                <option value="${sort.id}" ${sort.id === savedConfig.chineseSort ? 'selected' : ''}>
                   ${sort.label}
                 </option>
               `).join('')}
@@ -141,6 +177,25 @@ export async function showDateSortDialog(pid, performDateSort) {
     html: `
       <div class="ncm-sort-intro">
         <p>选择排序方式：</p>
+        <p class="ncm-sort-help">发行日期相同时，可继续按专辑和专辑内曲目顺序排列。</p>
+      </div>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="date-sort-albums" type="checkbox">
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">不同专辑按专辑名称排序</span>
+            <span class="ncm-sort-switch-help">将同一发行日期下的歌曲按专辑名称聚拢。</span>
+          </span>
+        </label>
+        <label id="date-sort-tracks-row" class="ncm-sort-switch-row is-disabled">
+          <input id="date-sort-tracks" type="checkbox" disabled>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">同一专辑按专辑内歌曲顺序排序</span>
+            <span class="ncm-sort-switch-help">需要先开启上面的专辑名称排序。</span>
+          </span>
+        </label>
       </div>
       <div class="ncm-sort-choice-list">
         <button id="sort-desc" class="ncm-sort-choice-button">从新到旧（倒序）</button>
@@ -152,13 +207,20 @@ export async function showDateSortDialog(pid, performDateSort) {
     cancelButtonText: '取消',
     customClass: swalClasses,
     didOpen: () => {
+      const albumSort = document.getElementById('date-sort-albums');
+      albumSort.addEventListener('change', () => {
+        setDateTrackSortDisabled(!albumSort.checked);
+      });
+
       document.getElementById('sort-desc').addEventListener('click', () => {
+        const config = readDateSortConfig();
         Swal.close();
-        performDateSort(pid, true);
+        performDateSort(pid, true, config);
       });
       document.getElementById('sort-asc').addEventListener('click', () => {
+        const config = readDateSortConfig();
         Swal.close();
-        performDateSort(pid, false);
+        performDateSort(pid, false, config);
       });
     }
   });

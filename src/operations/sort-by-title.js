@@ -2,6 +2,7 @@ import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { createTitleComparator, detectTitleCategoryIds } from '../sort/title.js';
+import { saveTitleSortConfig } from '../settings/title-sort.js';
 import { showTitleSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
 
@@ -12,6 +13,8 @@ export async function sortByTitle(pid) {
   const settings = await showTitleSortDialog(categoryIds);
 
   if (!settings.isConfirmed) return;
+
+  await saveTitleSortConfig(settings.value);
 
   if (!confirm('将直接修改当前歌单内歌曲顺序（不可一键撤销）。继续？')) return;
 

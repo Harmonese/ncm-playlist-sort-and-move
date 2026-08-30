@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.3
+// @version      0.5.4
 // @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -15,6 +15,8 @@
 // @require      https://fastly.jsdelivr.net/npm/sweetalert2@11.26.3/dist/sweetalert2.all.min.js
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addStyle
+// @grant        GM_getValue
+// @grant        GM_setValue
 // @connect      music.163.com
 // ==/UserScript==
 
@@ -122,6 +124,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (song.album && song.album.name) return song.album.name;
     return "";
   }
+  function getPositiveNumber(value) {
+    const number = Number.parseInt(value, 10);
+    return Number.isFinite(number) && number > 0 ? number : 0;
+  }
   function toSongItem(song) {
     return {
       id: song.id,
@@ -129,6 +135,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       artist: getArtistText(song),
       album: getAlbumText(song),
       albumId: song.al?.id || 0,
+      albumDiscNo: getPositiveNumber(song.disc || song.cd),
+      albumTrackNo: getPositiveNumber(song.no),
       publishTime: song.publishTime || 0
     };
   }
@@ -213,7 +221,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     chinese: "han"
   });
   function normalizeTitleSortConfig(config = DEFAULT_TITLE_SORT_CONFIG) {
-    const requestedOrder = Array.isArray(config.categoryOrder) ? config.categoryOrder : [];
+    const source = config && typeof config === "object" ? config : DEFAULT_TITLE_SORT_CONFIG;
+    const requestedOrder = Array.isArray(source.categoryOrder) ? source.categoryOrder : [];
     const categoryOrder = [];
     for (const requestedCategoryId of requestedOrder) {
       const categoryId = CATEGORY_ID_ALIASES[requestedCategoryId] || requestedCategoryId;
@@ -227,9 +236,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       }
     }
     return {
-      directStringCompare: Boolean(config.directStringCompare),
+      directStringCompare: Boolean(source.directStringCompare),
       categoryOrder,
-      chineseSort: TITLE_CHINESE_SORT_IDS.has(config.chineseSort) ? config.chineseSort : DEFAULT_TITLE_SORT_CONFIG.chineseSort
+      chineseSort: TITLE_CHINESE_SORT_IDS.has(source.chineseSort) ? source.chineseSort : DEFAULT_TITLE_SORT_CONFIG.chineseSort
     };
   }
   function classifyCharacter(character) {
@@ -339,6 +348,57 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     };
   }
   var cmpByTitle = createTitleComparator();
+
+  // src/settings/title-sort.js
+  var TITLE_SORT_SETTINGS_KEY = "ncm-playlist-sort:title-sort-config";
+  function readStoredValue() {
+    if (typeof globalThis.GM_getValue === "function") {
+      return globalThis.GM_getValue(TITLE_SORT_SETTINGS_KEY, null);
+    }
+    if (typeof globalThis.GM?.getValue === "function") {
+      return globalThis.GM.getValue(TITLE_SORT_SETTINGS_KEY, null);
+    }
+    if (globalThis.localStorage) {
+      const raw = globalThis.localStorage.getItem(TITLE_SORT_SETTINGS_KEY);
+      return raw ? JSON.parse(raw) : null;
+    }
+    return null;
+  }
+  function writeStoredValue(value) {
+    if (typeof globalThis.GM_setValue === "function") {
+      return Promise.resolve(
+        globalThis.GM_setValue(TITLE_SORT_SETTINGS_KEY, value)
+      ).then(() => true);
+    }
+    if (typeof globalThis.GM?.setValue === "function") {
+      return Promise.resolve(
+        globalThis.GM.setValue(TITLE_SORT_SETTINGS_KEY, value)
+      ).then(() => true);
+    }
+    if (globalThis.localStorage) {
+      globalThis.localStorage.setItem(TITLE_SORT_SETTINGS_KEY, JSON.stringify(value));
+      return true;
+    }
+    return false;
+  }
+  async function loadTitleSortConfig() {
+    try {
+      const stored = await Promise.resolve(readStoredValue());
+      return normalizeTitleSortConfig(stored);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u6807\u9898\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25\uFF0C\u4F7F\u7528\u9ED8\u8BA4\u8BBE\u7F6E", error);
+      return normalizeTitleSortConfig(DEFAULT_TITLE_SORT_CONFIG);
+    }
+  }
+  async function saveTitleSortConfig(config) {
+    const normalized = normalizeTitleSortConfig(config);
+    try {
+      return await Promise.resolve(writeStoredValue(normalized));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u6807\u9898\u6392\u5E8F\u8BBE\u7F6E\u5931\u8D25", error);
+      return false;
+    }
+  }
 
   // src/ui/styles.js
   var swalClasses = Object.freeze({
@@ -510,6 +570,22 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       align-items: flex-start;
       gap: 10px;
       cursor: pointer;
+    }
+
+    .ncm-sort-switch-row.is-disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    .ncm-sort-date-settings {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px;
+      border: 1px solid #e0e6e8;
+      border-radius: 8px;
+      background: #fbfcfc;
+      text-align: left;
     }
 
     .ncm-sort-switch-row input {
@@ -830,6 +906,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const categories = TITLE_CATEGORIES.filter((category) => requestedIds.has(category.id));
     return categories.length ? categories : [TITLE_CATEGORIES.find((category) => category.id === "other")];
   }
+  function orderTitleCategories(categories, savedOrder) {
+    const visibleIds = new Set(categories.map((category) => category.id));
+    const ordered = [];
+    for (const categoryId of savedOrder) {
+      const category = categories.find((item) => item.id === categoryId);
+      if (visibleIds.has(categoryId) && category && !ordered.includes(category)) {
+        ordered.push(category);
+      }
+    }
+    for (const category of categories) {
+      if (!ordered.includes(category)) ordered.push(category);
+    }
+    return ordered;
+  }
   function createTitleCategoryList(categories) {
     return categories.map((category, index) => `
     <li class="ncm-sort-priority-item" data-category="${category.id}">
@@ -864,8 +954,23 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     fieldset.disabled = disabled;
     fieldset.classList.toggle("is-disabled", disabled);
   }
-  function showTitleSortDialog(categoryIds) {
-    const categories = getVisibleTitleCategories(categoryIds);
+  function readDateSortConfig() {
+    return {
+      sortAlbumsByName: document.getElementById("date-sort-albums").checked,
+      sortAlbumTracks: document.getElementById("date-sort-tracks").checked
+    };
+  }
+  function setDateTrackSortDisabled(disabled) {
+    const input = document.getElementById("date-sort-tracks");
+    const row = document.getElementById("date-sort-tracks-row");
+    input.disabled = disabled;
+    if (disabled) input.checked = false;
+    row.classList.toggle("is-disabled", disabled);
+  }
+  async function showTitleSortDialog(categoryIds) {
+    const savedConfig = await loadTitleSortConfig();
+    const visibleCategories = getVisibleTitleCategories(categoryIds);
+    const categories = orderTitleCategories(visibleCategories, savedConfig.categoryOrder);
     const categoryNames = categories.map((category) => category.label).join("\u3001");
     return Swal.fire({
       title: "\u6309\u6807\u9898\u6392\u5E8F",
@@ -874,11 +979,12 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         <div class="ncm-sort-intro">
           <p>\u9009\u62E9\u6807\u9898\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
           <p class="ncm-sort-help">\u5173\u95ED\u76F4\u63A5\u6BD4\u8F83\u65F6\uFF0C\u811A\u672C\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
+          <p class="ncm-sort-help">\u4E0A\u6B21\u4F7F\u7528\u7684\u8BBE\u7F6E\u4F1A\u81EA\u52A8\u6062\u590D\u3002</p>
           <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${categories.length} \u7C7B\uFF08${categoryNames}\uFF09</p>
         </div>
 
         <label class="ncm-sort-switch-row">
-          <input id="title-direct-compare" type="checkbox" ${DEFAULT_TITLE_SORT_CONFIG.directStringCompare ? "checked" : ""}>
+          <input id="title-direct-compare" type="checkbox" ${savedConfig.directStringCompare ? "checked" : ""}>
           <span class="ncm-sort-switch" aria-hidden="true"></span>
           <span>
             <span class="ncm-sort-switch-label">\u4F7F\u7528\u76F4\u63A5\u5B57\u7B26\u4E32\u6BD4\u8F83</span>
@@ -896,7 +1002,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             <span class="ncm-sort-label">\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\uFF1A</span>
             <select id="title-chinese-sort" class="ncm-sort-select">
               ${TITLE_CHINESE_SORTS.map((sort) => `
-                <option value="${sort.id}" ${sort.id === DEFAULT_TITLE_SORT_CONFIG.chineseSort ? "selected" : ""}>
+                <option value="${sort.id}" ${sort.id === savedConfig.chineseSort ? "selected" : ""}>
                   ${sort.label}
                 </option>
               `).join("")}
@@ -940,6 +1046,25 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       html: `
       <div class="ncm-sort-intro">
         <p>\u9009\u62E9\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
+        <p class="ncm-sort-help">\u53D1\u884C\u65E5\u671F\u76F8\u540C\u65F6\uFF0C\u53EF\u7EE7\u7EED\u6309\u4E13\u8F91\u548C\u4E13\u8F91\u5185\u66F2\u76EE\u987A\u5E8F\u6392\u5217\u3002</p>
+      </div>
+      <div class="ncm-sort-date-settings">
+        <label class="ncm-sort-switch-row">
+          <input id="date-sort-albums" type="checkbox">
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u4E0D\u540C\u4E13\u8F91\u6309\u4E13\u8F91\u540D\u79F0\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u5C06\u540C\u4E00\u53D1\u884C\u65E5\u671F\u4E0B\u7684\u6B4C\u66F2\u6309\u4E13\u8F91\u540D\u79F0\u805A\u62E2\u3002</span>
+          </span>
+        </label>
+        <label id="date-sort-tracks-row" class="ncm-sort-switch-row is-disabled">
+          <input id="date-sort-tracks" type="checkbox" disabled>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u540C\u4E00\u4E13\u8F91\u6309\u4E13\u8F91\u5185\u6B4C\u66F2\u987A\u5E8F\u6392\u5E8F</span>
+            <span class="ncm-sort-switch-help">\u9700\u8981\u5148\u5F00\u542F\u4E0A\u9762\u7684\u4E13\u8F91\u540D\u79F0\u6392\u5E8F\u3002</span>
+          </span>
+        </label>
       </div>
       <div class="ncm-sort-choice-list">
         <button id="sort-desc" class="ncm-sort-choice-button">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
@@ -951,13 +1076,19 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       cancelButtonText: "\u53D6\u6D88",
       customClass: swalClasses,
       didOpen: () => {
+        const albumSort = document.getElementById("date-sort-albums");
+        albumSort.addEventListener("change", () => {
+          setDateTrackSortDisabled(!albumSort.checked);
+        });
         document.getElementById("sort-desc").addEventListener("click", () => {
+          const config = readDateSortConfig();
           Swal.close();
-          performDateSort2(pid, true);
+          performDateSort2(pid, true, config);
         });
         document.getElementById("sort-asc").addEventListener("click", () => {
+          const config = readDateSortConfig();
           Swal.close();
-          performDateSort2(pid, false);
+          performDateSort2(pid, false, config);
         });
       }
     });
@@ -1083,6 +1214,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const categoryIds = detectTitleCategoryIds(items);
     const settings = await showTitleSortDialog(categoryIds);
     if (!settings.isConfirmed) return;
+    await saveTitleSortConfig(settings.value);
     if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) return;
     showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
     const ordered = items.slice().sort(createTitleComparator(settings.value)).map((x) => x.id);
@@ -1108,12 +1240,59 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
 
   // src/sort/date.js
-  function cmpByDate(descending) {
+  var collator2 = new Intl.Collator(void 0, {
+    numeric: false,
+    sensitivity: "base",
+    usage: "sort"
+  });
+  var DEFAULT_DATE_SORT_CONFIG = Object.freeze({
+    sortAlbumsByName: false,
+    sortAlbumTracks: false
+  });
+  function normalizeDateSortConfig(config = DEFAULT_DATE_SORT_CONFIG) {
+    const source = config && typeof config === "object" ? config : DEFAULT_DATE_SORT_CONFIG;
+    const sortAlbumsByName = Boolean(source.sortAlbumsByName);
+    return {
+      sortAlbumsByName,
+      sortAlbumTracks: sortAlbumsByName && Boolean(source.sortAlbumTracks)
+    };
+  }
+  function compareAlbumTrackOrder(a, b) {
+    const discA = a.albumDiscNo || 0;
+    const discB = b.albumDiscNo || 0;
+    if (discA !== discB) {
+      if (!discA) return 1;
+      if (!discB) return -1;
+      return discA - discB;
+    }
+    const trackA = a.albumTrackNo || 0;
+    const trackB = b.albumTrackNo || 0;
+    if (trackA !== trackB) {
+      if (!trackA) return 1;
+      if (!trackB) return -1;
+      return trackA - trackB;
+    }
+    return 0;
+  }
+  function isSameAlbum(a, b) {
+    if (a.albumId && b.albumId) return a.albumId === b.albumId;
+    return (a.album || "") === (b.album || "");
+  }
+  function cmpByDate(descending, config = DEFAULT_DATE_SORT_CONFIG) {
+    const normalizedConfig = normalizeDateSortConfig(config);
     return (a, b) => {
       const timeA = a.publishTime || 0;
       const timeB = b.publishTime || 0;
       if (timeA !== timeB) {
         return descending ? timeB - timeA : timeA - timeB;
+      }
+      if (normalizedConfig.sortAlbumsByName) {
+        const albumResult = collator2.compare(a.album || "", b.album || "");
+        if (albumResult) return albumResult;
+        if (normalizedConfig.sortAlbumTracks && isSameAlbum(a, b)) {
+          const trackResult = compareAlbumTrackOrder(a, b);
+          if (trackResult) return trackResult;
+        }
       }
       return cmpByTitle(a, b);
     };
@@ -1123,7 +1302,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   async function sortByPublishDate(pid) {
     const result = await showDateSortDialog(pid, performDateSort);
   }
-  async function performDateSort(pid, descending) {
+  async function performDateSort(pid, descending, dateSortConfig) {
     try {
       showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
       const { playlist, items } = await getAllSongs(pid);
@@ -1151,7 +1330,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         }
       }
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-      const ordered = items.slice().sort(cmpByDate(descending)).map((x) => x.id);
+      const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map((x) => x.id);
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
       if (res && res.code === 200) {

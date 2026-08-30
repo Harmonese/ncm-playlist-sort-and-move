@@ -10,6 +10,11 @@ export function getAlbumText(song) {
   return '';
 }
 
+function getPositiveNumber(value) {
+  const number = Number.parseInt(value, 10);
+  return Number.isFinite(number) && number > 0 ? number : 0;
+}
+
 export function toSongItem(song) {
   return {
     id: song.id,
@@ -17,6 +22,8 @@ export function toSongItem(song) {
     artist: getArtistText(song),
     album: getAlbumText(song),
     albumId: song.al?.id || 0,
+    albumDiscNo: getPositiveNumber(song.disc || song.cd),
+    albumTrackNo: getPositiveNumber(song.no),
     publishTime: song.publishTime || 0
   };
 }

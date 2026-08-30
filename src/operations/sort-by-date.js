@@ -9,7 +9,7 @@ export async function sortByPublishDate(pid) {
   const result = await showDateSortDialog(pid, performDateSort);
 }
 
-export async function performDateSort(pid, descending) {
+export async function performDateSort(pid, descending, dateSortConfig) {
   try {
     showToast('开始获取歌单歌曲...');
     const { playlist, items } = await getAllSongs(pid);
@@ -42,7 +42,7 @@ export async function performDateSort(pid, descending) {
     }
 
     showToast(`获取完成：${items.length} 首，开始排序...`);
-    const ordered = items.slice().sort(cmpByDate(descending)).map(x => x.id);
+    const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map(x => x.id);
 
     showToast('写回歌单顺序(op=update)...');
     const res = await updatePlaylistOrder(pid, ordered);

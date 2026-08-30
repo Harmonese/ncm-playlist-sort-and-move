@@ -58,8 +58,11 @@ const CATEGORY_ID_ALIASES = Object.freeze({
   chinese: 'han'
 });
 
-function normalizeTitleSortConfig(config = DEFAULT_TITLE_SORT_CONFIG) {
-  const requestedOrder = Array.isArray(config.categoryOrder) ? config.categoryOrder : [];
+export function normalizeTitleSortConfig(config = DEFAULT_TITLE_SORT_CONFIG) {
+  const source = config && typeof config === 'object'
+    ? config
+    : DEFAULT_TITLE_SORT_CONFIG;
+  const requestedOrder = Array.isArray(source.categoryOrder) ? source.categoryOrder : [];
   const categoryOrder = [];
 
   for (const requestedCategoryId of requestedOrder) {
@@ -76,10 +79,10 @@ function normalizeTitleSortConfig(config = DEFAULT_TITLE_SORT_CONFIG) {
   }
 
   return {
-    directStringCompare: Boolean(config.directStringCompare),
+    directStringCompare: Boolean(source.directStringCompare),
     categoryOrder,
-    chineseSort: TITLE_CHINESE_SORT_IDS.has(config.chineseSort)
-      ? config.chineseSort
+    chineseSort: TITLE_CHINESE_SORT_IDS.has(source.chineseSort)
+      ? source.chineseSort
       : DEFAULT_TITLE_SORT_CONFIG.chineseSort
   };
 }

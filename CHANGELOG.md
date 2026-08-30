@@ -6,6 +6,19 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.4] - 2026-08-30
+
+### Added
+
+- Added persistent title sorting settings using userscript storage, with a local storage fallback.
+- Added optional date-sort tie-breakers for album name and album track order.
+- Added tests for persistent settings, date sorting, and album track metadata.
+
+### Changed
+
+- Improved date sorting controls with a dependent switch for album track order.
+- Preserved album disc and track numbers during song data normalization.
+
 ## [0.5.3] - 2026-08-30
 
 ### Added

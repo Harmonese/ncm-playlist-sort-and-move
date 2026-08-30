@@ -171,6 +171,22 @@ export function installStyles() {
       cursor: pointer;
     }
 
+    .ncm-sort-switch-row.is-disabled {
+      opacity: 0.48;
+      cursor: not-allowed;
+    }
+
+    .ncm-sort-date-settings {
+      display: grid;
+      gap: 12px;
+      margin-bottom: 18px;
+      padding: 14px;
+      border: 1px solid #e0e6e8;
+      border-radius: 8px;
+      background: #fbfcfc;
+      text-align: left;
+    }
+
     .ncm-sort-switch-row input {
       position: absolute;
       width: 1px;
