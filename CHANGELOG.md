@@ -6,16 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-08-30
+
 ### Added
 
-- Project README with feature description, installation steps, risk notes, screenshot section, and roadmap.
-- MIT license.
-- Basic `.gitignore`.
+- Added configurable priority ordering for Latin letters, Han characters, Japanese kana, Hangul, Cyrillic, Greek, Arabic, numbers, and other characters.
+- Added selectable Han character ordering: pinyin, stroke, or Unicode.
+- Added a direct string comparison mode that disables character category priorities.
+- Added title sorting tests, including writing-system classification and pinyin tie handling.
 
 ### Changed
 
-- Renamed the userscript from `untitled.user.js` to `ncm-playlist-sort-and-move.user.js`.
-- Updated userscript metadata with project homepage, support, update, and download links.
+- Reworked title sorting into a unified character-by-character comparator.
+- Removed automatic title prefix cleanup and whole-title category grouping.
+- Made pinyin ties continue to later characters before using raw Unicode as a final tie-breaker.
+- Expanded the former English category to cover Latin-script characters such as accented letters.
 
 ## [0.5.1] - 2026-08-30
 

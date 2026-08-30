@@ -1,15 +1,15 @@
 import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
-import { cmpByTitle } from '../sort/title.js';
+import { createTitleComparator } from '../sort/title.js';
 import { swalClasses } from '../ui/styles.js';
 
-export async function sortByTitle(pid) {
+export async function sortByTitle(pid, sortConfig) {
   showToast('开始获取歌单歌曲...');
   const { playlist, items } = await getAllSongs(pid);
 
   showToast(`获取完成：${items.length} 首，开始排序...`);
-  const ordered = items.slice().sort(cmpByTitle).map(x => x.id);
+  const ordered = items.slice().sort(createTitleComparator(sortConfig)).map(x => x.id);
 
   showToast('写回歌单顺序(op=update)...');
   const res = await updatePlaylistOrder(pid, ordered);

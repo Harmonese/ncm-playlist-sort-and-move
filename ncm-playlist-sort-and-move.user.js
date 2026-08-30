@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.1
+// @version      0.5.2
 // @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -10,6 +10,7 @@
 // @updateURL    https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/ncm-playlist-sort-and-move.user.js
 // @downloadURL  https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/ncm-playlist-sort-and-move.user.js
 // @match        https://music.163.com/*
+// @require      https://cdn.jsdelivr.net/npm/pinyin-pro@3.29.3/dist/index.js
 // @require      https://fastly.jsdelivr.net/npm/node-forge@1.3.1/dist/forge.min.js
 // @require      https://fastly.jsdelivr.net/npm/sweetalert2@11.26.3/dist/sweetalert2.all.min.js
 // @grant        GM_xmlhttpRequest
@@ -160,79 +161,174 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
   // src/sort/title.js
   var collator = new Intl.Collator(void 0, {
-    numeric: true,
+    numeric: false,
     sensitivity: "base",
     usage: "sort"
   });
-  function getFirstEffectiveChar(title) {
-    if (!title) return "";
-    let t = normalizeTitleForSort(title);
-    t = t.trim();
-    if (!t) return "";
-    return t[0];
-  }
-  function isLetterLike(ch) {
-    if (!ch) return false;
-    return /[A-Za-z\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(ch);
-  }
-  function isDigit(ch) {
-    if (!ch) return false;
-    return /[0-9]/.test(ch);
-  }
-  function isSymbolOnlyTitle(title) {
-    if (!title) return true;
-    const t = title.trim();
-    if (!t) return true;
-    const hasNormalChar = /[0-9A-Za-z\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF]/.test(t);
-    if (!hasNormalChar) return true;
-    const strongPrefixMatch = t.match(/^[!@#$%^&*~\-_=+]+/);
-    if (strongPrefixMatch && strongPrefixMatch[0].length >= 3) {
-      return true;
+  var strokeCollator = new Intl.Collator("zh-u-co-stroke", {
+    numeric: false,
+    sensitivity: "base",
+    usage: "sort"
+  });
+  var pinyinCollator = new Intl.Collator("en", {
+    numeric: false,
+    sensitivity: "base",
+    usage: "sort"
+  });
+  var TITLE_CATEGORIES = Object.freeze([
+    { id: "latin", label: "\u62C9\u4E01\u5B57\u6BCD" },
+    { id: "han", label: "\u6C49\u5B57" },
+    { id: "kana", label: "\u65E5\u6587\u5047\u540D" },
+    { id: "hangul", label: "\u97E9\u6587" },
+    { id: "cyrillic", label: "\u897F\u91CC\u5C14\u5B57\u6BCD" },
+    { id: "greek", label: "\u5E0C\u814A\u5B57\u6BCD" },
+    { id: "arabic", label: "\u963F\u62C9\u4F2F\u5B57\u6BCD" },
+    { id: "number", label: "\u6570\u5B57" },
+    { id: "other", label: "\u5176\u4ED6" }
+  ]);
+  var TITLE_CHINESE_SORTS = Object.freeze([
+    { id: "pinyin", label: "\u62FC\u97F3\u987A\u5E8F" },
+    { id: "stroke", label: "\u7B14\u753B\u987A\u5E8F" },
+    { id: "unicode", label: "Unicode \u987A\u5E8F" }
+  ]);
+  var TITLE_CHINESE_SORT_IDS = new Set(TITLE_CHINESE_SORTS.map((sort) => sort.id));
+  var TITLE_CATEGORY_IDS = new Set(TITLE_CATEGORIES.map((category) => category.id));
+  var DEFAULT_TITLE_SORT_CONFIG = Object.freeze({
+    directStringCompare: false,
+    categoryOrder: Object.freeze([
+      "latin",
+      "han",
+      "kana",
+      "hangul",
+      "cyrillic",
+      "greek",
+      "arabic",
+      "number",
+      "other"
+    ]),
+    chineseSort: "pinyin"
+  });
+  var CATEGORY_ID_ALIASES = Object.freeze({
+    english: "latin",
+    chinese: "han"
+  });
+  function normalizeTitleSortConfig(config = DEFAULT_TITLE_SORT_CONFIG) {
+    const requestedOrder = Array.isArray(config.categoryOrder) ? config.categoryOrder : [];
+    const categoryOrder = [];
+    for (const requestedCategoryId of requestedOrder) {
+      const categoryId = CATEGORY_ID_ALIASES[requestedCategoryId] || requestedCategoryId;
+      if (TITLE_CATEGORY_IDS.has(categoryId) && !categoryOrder.includes(categoryId)) {
+        categoryOrder.push(categoryId);
+      }
     }
-    return false;
-  }
-  function normalizeTitleForSort(title) {
-    if (!title) return "";
-    let t = title;
-    t = t.replace(/^\s+/, "");
-    let prev;
-    do {
-      prev = t;
-      t = t.replace(/^(\s*[【\[\(（].{0,20}?[】\]\)）])\s*/u, "").replace(/^(\s*[-~—─·•]+)\s*/, "");
-    } while (t !== prev);
-    return t || title;
-  }
-  function getTitleGroup(title) {
-    const first = getFirstEffectiveChar(title);
-    if (isLetterLike(first)) return 0;
-    if (isDigit(first)) return 1;
-    return 2;
-  }
-  function cmpByTitle(a, b) {
-    const titleA = a.title || "";
-    const titleB = b.title || "";
-    const aSymbolOnly = isSymbolOnlyTitle(titleA);
-    const bSymbolOnly = isSymbolOnlyTitle(titleB);
-    if (aSymbolOnly !== bSymbolOnly) {
-      return aSymbolOnly ? 1 : -1;
+    for (const category of TITLE_CATEGORIES) {
+      if (!categoryOrder.includes(category.id)) {
+        categoryOrder.push(category.id);
+      }
     }
-    const groupA = aSymbolOnly ? 2 : getTitleGroup(titleA);
-    const groupB = bSymbolOnly ? 2 : getTitleGroup(titleB);
-    if (groupA !== groupB) {
-      return groupA - groupB;
-    }
-    const sortTitleA = normalizeTitleForSort(titleA);
-    const sortTitleB = normalizeTitleForSort(titleB);
-    let r = collator.compare(sortTitleA, sortTitleB);
-    if (r) return r;
-    r = collator.compare(titleA, titleB);
-    if (r) return r;
-    r = collator.compare(a.artist || "", b.artist || "");
-    if (r) return r;
-    r = collator.compare(a.album || "", b.album || "");
-    if (r) return r;
-    return a.id - b.id;
+    return {
+      directStringCompare: Boolean(config.directStringCompare),
+      categoryOrder,
+      chineseSort: TITLE_CHINESE_SORT_IDS.has(config.chineseSort) ? config.chineseSort : DEFAULT_TITLE_SORT_CONFIG.chineseSort
+    };
   }
+  function classifyCharacter(character) {
+    if (/\p{Script=Latin}/u.test(character)) return "latin";
+    if (/\p{Decimal_Number}/u.test(character)) return "number";
+    if (/\p{Script=Han}/u.test(character)) return "han";
+    if (/\p{Script_Extensions=Hiragana}|\p{Script_Extensions=Katakana}/u.test(character)) {
+      return "kana";
+    }
+    if (/\p{Script=Hangul}/u.test(character)) return "hangul";
+    if (/\p{Script=Cyrillic}/u.test(character)) return "cyrillic";
+    if (/\p{Script=Greek}/u.test(character)) return "greek";
+    if (/\p{Script=Arabic}/u.test(character)) return "arabic";
+    return "other";
+  }
+  function compareUnicodeCharacters(a, b) {
+    return (a.codePointAt(0) || 0) - (b.codePointAt(0) || 0);
+  }
+  function compareUnicodeStrings(a, b) {
+    const charsA = Array.from(a);
+    const charsB = Array.from(b);
+    const length = Math.min(charsA.length, charsB.length);
+    for (let index = 0; index < length; index++) {
+      const result = compareUnicodeCharacters(charsA[index], charsB[index]);
+      if (result) return result;
+    }
+    return charsA.length - charsB.length;
+  }
+  var pinyinCache = /* @__PURE__ */ new Map();
+  function getPinyinKey(character) {
+    if (pinyinCache.has(character)) return pinyinCache.get(character);
+    const pinyin = globalThis.pinyinPro?.pinyin;
+    if (typeof pinyin !== "function") {
+      throw new Error("\u62FC\u97F3\u6392\u5E8F\u5E93\u52A0\u8F7D\u5931\u8D25\uFF0C\u8BF7\u5237\u65B0\u9875\u9762\u540E\u91CD\u8BD5");
+    }
+    const result = pinyin(character, {
+      toneType: "none",
+      type: "array",
+      v: true
+    });
+    const key = Array.isArray(result) && result[0] ? result[0] : character;
+    pinyinCache.set(character, key);
+    return key;
+  }
+  function compareCharacters(a, b, category, chineseSort) {
+    if (category === "han") {
+      if (chineseSort === "unicode") {
+        return compareUnicodeCharacters(a, b);
+      }
+      if (chineseSort === "pinyin") {
+        return pinyinCollator.compare(getPinyinKey(a), getPinyinKey(b));
+      }
+      return strokeCollator.compare(a, b);
+    }
+    const result = collator.compare(a, b);
+    if (result) return result;
+    return 0;
+  }
+  function compareTitles(titleA, titleB, config) {
+    if (config.directStringCompare) {
+      const result = collator.compare(titleA, titleB);
+      return result || compareUnicodeStrings(titleA, titleB);
+    }
+    const charsA = Array.from(titleA);
+    const charsB = Array.from(titleB);
+    const categoryRanks = Object.fromEntries(
+      config.categoryOrder.map((categoryId, index) => [categoryId, index])
+    );
+    const length = Math.min(charsA.length, charsB.length);
+    for (let index = 0; index < length; index++) {
+      const charA = charsA[index];
+      const charB = charsB[index];
+      const categoryA = classifyCharacter(charA);
+      const categoryB = classifyCharacter(charB);
+      const rankA = categoryRanks[categoryA];
+      const rankB = categoryRanks[categoryB];
+      if (rankA !== rankB) return rankA - rankB;
+      const characterResult = compareCharacters(charA, charB, categoryA, config.chineseSort);
+      if (characterResult) return characterResult;
+    }
+    const lengthResult = charsA.length - charsB.length;
+    if (lengthResult) return lengthResult;
+    return compareUnicodeStrings(titleA, titleB);
+  }
+  function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
+    const normalizedConfig = normalizeTitleSortConfig(config);
+    return (a, b) => {
+      const titleA = a.title || "";
+      const titleB = b.title || "";
+      const titleResult = compareTitles(titleA, titleB, normalizedConfig);
+      if (titleResult) return titleResult;
+      const artistResult = collator.compare(a.artist || "", b.artist || "");
+      if (artistResult) return artistResult;
+      const albumResult = collator.compare(a.album || "", b.album || "");
+      if (albumResult) return albumResult;
+      return a.id - b.id;
+    };
+  }
+  var cmpByTitle = createTitleComparator();
 
   // src/ui/styles.js
   var swalClasses = Object.freeze({
@@ -389,6 +485,212 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       text-align: left;
     }
 
+    .ncm-sort-title-settings {
+      display: grid;
+      gap: 16px;
+      text-align: left;
+    }
+
+    .ncm-sort-title-settings .ncm-sort-intro {
+      margin-bottom: 0 !important;
+    }
+
+    .ncm-sort-switch-row {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-switch-row input {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+      clip: rect(0 0 0 0);
+      clip-path: inset(50%);
+      white-space: nowrap;
+    }
+
+    .ncm-sort-switch {
+      position: relative;
+      flex: 0 0 auto;
+      width: 36px;
+      height: 20px;
+      margin-top: 1px;
+      border-radius: 10px;
+      background: #cbd4d6;
+      transition: background-color 0.15s ease;
+    }
+
+    .ncm-sort-switch::after {
+      position: absolute;
+      top: 3px;
+      left: 3px;
+      width: 14px;
+      height: 14px;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 1px 3px rgba(24, 34, 38, 0.2);
+      content: '';
+      transition: transform 0.15s ease;
+    }
+
+    .ncm-sort-switch-row input:checked + .ncm-sort-switch {
+      background: #2f7d75;
+    }
+
+    .ncm-sort-switch-row input:checked + .ncm-sort-switch::after {
+      transform: translateX(16px);
+    }
+
+    .ncm-sort-switch-row input:focus-visible + .ncm-sort-switch {
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.18);
+    }
+
+    .ncm-sort-switch-label {
+      display: block;
+      color: #2e393d;
+      font-size: 14px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .ncm-sort-switch-help {
+      display: block;
+      margin-top: 3px;
+      color: #6c787d;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    .ncm-sort-priority-panel {
+      min-width: 0;
+      margin: 0;
+      padding: 14px 14px 12px;
+      border: 1px solid #e0e6e8;
+      border-radius: 8px;
+      text-align: left;
+      transition: opacity 0.15s ease, background-color 0.15s ease;
+    }
+
+    .ncm-sort-priority-panel legend {
+      padding: 0 6px;
+      color: #3e4a4f;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-priority-panel.is-disabled {
+      opacity: 0.48;
+      background: #f4f6f6;
+    }
+
+    .ncm-sort-priority-panel .ncm-sort-help {
+      margin: 0 0 10px !important;
+    }
+
+    .ncm-sort-select-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .ncm-sort-select {
+      min-width: 144px;
+      height: 36px;
+      box-sizing: border-box;
+      padding: 0 30px 0 10px;
+      border: 1px solid #d5dddf;
+      border-radius: 7px;
+      background: #fff;
+      color: #344146;
+      font: inherit;
+      font-size: 13px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-select:focus {
+      border-color: #5c9a93;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+      outline: none;
+    }
+
+    .ncm-sort-priority-list {
+      display: grid;
+      gap: 7px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ncm-sort-priority-item {
+      display: flex;
+      min-height: 38px;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      box-sizing: border-box;
+      padding: 5px 7px 5px 9px;
+      border: 1px solid #e1e7e8;
+      border-radius: 7px;
+      background: #fbfcfc;
+    }
+
+    .ncm-sort-priority-name {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 9px;
+      color: #344146;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .ncm-sort-priority-index {
+      display: inline-flex;
+      width: 21px;
+      height: 21px;
+      align-items: center;
+      justify-content: center;
+      border-radius: 50%;
+      background: #edf2f2;
+      color: #56706d;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-priority-actions {
+      display: inline-flex;
+      gap: 4px;
+    }
+
+    .ncm-sort-icon-button {
+      display: inline-flex;
+      width: 28px;
+      height: 28px;
+      align-items: center;
+      justify-content: center;
+      margin: 0 !important;
+      padding: 0 !important;
+      border: 1px solid #dce4e5 !important;
+      border-radius: 6px !important;
+      background: #fff !important;
+      color: #536166 !important;
+      font-size: 15px !important;
+      line-height: 1 !important;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+    }
+
+    .ncm-sort-icon-button:hover {
+      border-color: #73a9a3 !important;
+      background: #edf6f4 !important;
+      color: #205e58 !important;
+    }
+
     .ncm-sort-help {
       margin-top: 6px !important;
       color: #6c787d !important;
@@ -466,6 +768,21 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         font-size: 19px !important;
       }
 
+      .ncm-sort-priority-panel {
+        padding-right: 10px;
+        padding-left: 10px;
+      }
+
+      .ncm-sort-select-row {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 6px;
+      }
+
+      .ncm-sort-select {
+        width: 100%;
+      }
+
       .ncm-sort-fields {
         grid-template-columns: 1fr;
         gap: 10px;
@@ -484,11 +801,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
 
   // src/operations/sort-by-title.js
-  async function sortByTitle(pid) {
+  async function sortByTitle(pid, sortConfig) {
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
     const { playlist, items } = await getAllSongs(pid);
     showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-    const ordered = items.slice().sort(cmpByTitle).map((x) => x.id);
+    const ordered = items.slice().sort(createTitleComparator(sortConfig)).map((x) => x.id);
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
     const res = await updatePlaylistOrder(pid, ordered);
     if (res && res.code === 200) {
@@ -523,6 +840,107 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
 
   // src/ui/dialogs.js
+  function createTitleCategoryList() {
+    return TITLE_CATEGORIES.map((category, index) => `
+    <li class="ncm-sort-priority-item" data-category="${category.id}">
+      <span class="ncm-sort-priority-name">
+        <span class="ncm-sort-priority-index">${index + 1}</span>
+        ${category.label}
+      </span>
+      <span class="ncm-sort-priority-actions">
+        <button type="button" class="ncm-sort-icon-button" data-move="up" title="\u4E0A\u79FB" aria-label="\u4E0A\u79FB">\u2191</button>
+        <button type="button" class="ncm-sort-icon-button" data-move="down" title="\u4E0B\u79FB" aria-label="\u4E0B\u79FB">\u2193</button>
+      </span>
+    </li>
+  `).join("");
+  }
+  function readTitleSortConfig() {
+    const list = document.querySelector(".ncm-sort-priority-list");
+    const directStringCompare = document.getElementById("title-direct-compare").checked;
+    const chineseSort = document.getElementById("title-chinese-sort").value;
+    return {
+      directStringCompare,
+      categoryOrder: [...list.querySelectorAll("[data-category]")].map((item) => item.dataset.category),
+      chineseSort
+    };
+  }
+  function refreshPriorityIndexes(list) {
+    [...list.querySelectorAll(".ncm-sort-priority-item")].forEach((item, index) => {
+      item.querySelector(".ncm-sort-priority-index").textContent = index + 1;
+    });
+  }
+  function setPriorityDisabled(disabled) {
+    const fieldset = document.getElementById("title-category-priority");
+    fieldset.disabled = disabled;
+    fieldset.classList.toggle("is-disabled", disabled);
+  }
+  function showTitleSortDialog() {
+    return Swal.fire({
+      title: "\u6309\u6807\u9898\u6392\u5E8F",
+      html: `
+      <div class="ncm-sort-title-settings">
+        <div class="ncm-sort-intro">
+          <p>\u9009\u62E9\u6807\u9898\u7684\u6BD4\u8F83\u65B9\u5F0F\uFF1A</p>
+          <p class="ncm-sort-help">\u5173\u95ED\u76F4\u63A5\u6BD4\u8F83\u65F6\uFF0C\u811A\u672C\u4F1A\u4ECE\u5DE6\u5230\u53F3\u9010\u4E2A\u5B57\u7B26\u6BD4\u8F83\u3002</p>
+        </div>
+
+        <label class="ncm-sort-switch-row">
+          <input id="title-direct-compare" type="checkbox" ${DEFAULT_TITLE_SORT_CONFIG.directStringCompare ? "checked" : ""}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">\u4F7F\u7528\u76F4\u63A5\u5B57\u7B26\u4E32\u6BD4\u8F83</span>
+            <span class="ncm-sort-switch-help">\u5F00\u542F\u540E\u4E0D\u4F7F\u7528\u4E0B\u9762\u7684\u5B57\u7B26\u7C7B\u522B\u4F18\u5148\u7EA7\u3002</span>
+          </span>
+        </label>
+
+        <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
+          <legend>\u5B57\u7B26\u7C7B\u522B\u4F18\u5148\u7EA7</legend>
+          <p class="ncm-sort-help">\u8D8A\u9760\u4E0A\u4F18\u5148\u7EA7\u8D8A\u9AD8\u3002\u6BCF\u4E2A\u6807\u9898\u4F4D\u7F6E\u90FD\u4F1A\u4F7F\u7528\u540C\u4E00\u5957\u987A\u5E8F\u3002</p>
+          <ol class="ncm-sort-priority-list">
+            ${createTitleCategoryList()}
+          </ol>
+          <label class="ncm-sort-select-row">
+            <span class="ncm-sort-label">\u6C49\u5B57\u6392\u5E8F\u65B9\u5F0F\uFF1A</span>
+            <select id="title-chinese-sort" class="ncm-sort-select">
+              ${TITLE_CHINESE_SORTS.map((sort) => `
+                <option value="${sort.id}" ${sort.id === DEFAULT_TITLE_SORT_CONFIG.chineseSort ? "selected" : ""}>
+                  ${sort.label}
+                </option>
+              `).join("")}
+            </select>
+          </label>
+        </fieldset>
+      </div>
+    `,
+      showCancelButton: true,
+      confirmButtonText: "\u5F00\u59CB\u6392\u5E8F",
+      cancelButtonText: "\u53D6\u6D88",
+      focusConfirm: false,
+      customClass: swalClasses,
+      didOpen: () => {
+        const directCompare = document.getElementById("title-direct-compare");
+        const list = document.querySelector(".ncm-sort-priority-list");
+        directCompare.addEventListener("change", () => {
+          setPriorityDisabled(directCompare.checked);
+        });
+        list.addEventListener("click", (event) => {
+          const button = event.target.closest("[data-move]");
+          if (!button) return;
+          const item = button.closest(".ncm-sort-priority-item");
+          const sibling = button.dataset.move === "up" ? item.previousElementSibling : item.nextElementSibling;
+          if (!sibling) return;
+          if (button.dataset.move === "up") {
+            list.insertBefore(item, sibling);
+          } else {
+            list.insertBefore(sibling, item);
+          }
+          refreshPriorityIndexes(list);
+        });
+        setPriorityDisabled(directCompare.checked);
+      },
+      preConfirm: () => readTitleSortConfig()
+    });
+  }
   async function showDateSortDialog(pid, performDateSort2) {
     const result = await Swal.fire({
       title: "\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F",
@@ -845,18 +1263,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       didOpen: () => {
         document.getElementById("sort-by-title").addEventListener("click", async () => {
           Swal.close();
-          if (confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) {
-            try {
-              await sortByTitle(pid);
-            } catch (e) {
-              console.error(e);
-              Swal.fire({
-                icon: "error",
-                title: "\u51FA\u9519",
-                text: e?.message || String(e),
-                customClass: swalClasses
-              });
+          try {
+            const settings = await showTitleSortDialog();
+            if (!settings.isConfirmed) return;
+            if (confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF08\u4E0D\u53EF\u4E00\u952E\u64A4\u9500\uFF09\u3002\u7EE7\u7EED\uFF1F")) {
+              await sortByTitle(pid, settings.value);
             }
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
           }
         });
         document.getElementById("sort-by-date").addEventListener("click", async () => {

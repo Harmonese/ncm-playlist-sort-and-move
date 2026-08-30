@@ -1,4 +1,124 @@
 import { dangerSwalClasses, swalClasses } from './styles.js';
+import {
+  DEFAULT_TITLE_SORT_CONFIG,
+  TITLE_CATEGORIES,
+  TITLE_CHINESE_SORTS
+} from '../sort/title.js';
+
+function createTitleCategoryList() {
+  return TITLE_CATEGORIES.map((category, index) => `
+    <li class="ncm-sort-priority-item" data-category="${category.id}">
+      <span class="ncm-sort-priority-name">
+        <span class="ncm-sort-priority-index">${index + 1}</span>
+        ${category.label}
+      </span>
+      <span class="ncm-sort-priority-actions">
+        <button type="button" class="ncm-sort-icon-button" data-move="up" title="上移" aria-label="上移">↑</button>
+        <button type="button" class="ncm-sort-icon-button" data-move="down" title="下移" aria-label="下移">↓</button>
+      </span>
+    </li>
+  `).join('');
+}
+
+function readTitleSortConfig() {
+  const list = document.querySelector('.ncm-sort-priority-list');
+  const directStringCompare = document.getElementById('title-direct-compare').checked;
+  const chineseSort = document.getElementById('title-chinese-sort').value;
+
+  return {
+    directStringCompare,
+    categoryOrder: [...list.querySelectorAll('[data-category]')].map(item => item.dataset.category),
+    chineseSort
+  };
+}
+
+function refreshPriorityIndexes(list) {
+  [...list.querySelectorAll('.ncm-sort-priority-item')].forEach((item, index) => {
+    item.querySelector('.ncm-sort-priority-index').textContent = index + 1;
+  });
+}
+
+function setPriorityDisabled(disabled) {
+  const fieldset = document.getElementById('title-category-priority');
+  fieldset.disabled = disabled;
+  fieldset.classList.toggle('is-disabled', disabled);
+}
+
+export function showTitleSortDialog() {
+  return Swal.fire({
+    title: '按标题排序',
+    html: `
+      <div class="ncm-sort-title-settings">
+        <div class="ncm-sort-intro">
+          <p>选择标题的比较方式：</p>
+          <p class="ncm-sort-help">关闭直接比较时，脚本会从左到右逐个字符比较。</p>
+        </div>
+
+        <label class="ncm-sort-switch-row">
+          <input id="title-direct-compare" type="checkbox" ${DEFAULT_TITLE_SORT_CONFIG.directStringCompare ? 'checked' : ''}>
+          <span class="ncm-sort-switch" aria-hidden="true"></span>
+          <span>
+            <span class="ncm-sort-switch-label">使用直接字符串比较</span>
+            <span class="ncm-sort-switch-help">开启后不使用下面的字符类别优先级。</span>
+          </span>
+        </label>
+
+        <fieldset id="title-category-priority" class="ncm-sort-priority-panel">
+          <legend>字符类别优先级</legend>
+          <p class="ncm-sort-help">越靠上优先级越高。每个标题位置都会使用同一套顺序。</p>
+          <ol class="ncm-sort-priority-list">
+            ${createTitleCategoryList()}
+          </ol>
+          <label class="ncm-sort-select-row">
+            <span class="ncm-sort-label">汉字排序方式：</span>
+            <select id="title-chinese-sort" class="ncm-sort-select">
+              ${TITLE_CHINESE_SORTS.map(sort => `
+                <option value="${sort.id}" ${sort.id === DEFAULT_TITLE_SORT_CONFIG.chineseSort ? 'selected' : ''}>
+                  ${sort.label}
+                </option>
+              `).join('')}
+            </select>
+          </label>
+        </fieldset>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: '开始排序',
+    cancelButtonText: '取消',
+    focusConfirm: false,
+    customClass: swalClasses,
+    didOpen: () => {
+      const directCompare = document.getElementById('title-direct-compare');
+      const list = document.querySelector('.ncm-sort-priority-list');
+
+      directCompare.addEventListener('change', () => {
+        setPriorityDisabled(directCompare.checked);
+      });
+
+      list.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-move]');
+        if (!button) return;
+
+        const item = button.closest('.ncm-sort-priority-item');
+        const sibling = button.dataset.move === 'up'
+          ? item.previousElementSibling
+          : item.nextElementSibling;
+
+        if (!sibling) return;
+
+        if (button.dataset.move === 'up') {
+          list.insertBefore(item, sibling);
+        } else {
+          list.insertBefore(sibling, item);
+        }
+        refreshPriorityIndexes(list);
+      });
+
+      setPriorityDisabled(directCompare.checked);
+    },
+    preConfirm: () => readTitleSortConfig()
+  });
+}
 
 export async function showDateSortDialog(pid, performDateSort) {
   const result = await Swal.fire({

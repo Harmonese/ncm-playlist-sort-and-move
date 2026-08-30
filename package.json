@@ -1,15 +1,17 @@
 {
   "name": "ncm-playlist-sort-and-move",
-  "version": "0.5.1",
+  "version": "0.5.2",
   "private": true,
   "description": "网易云音乐歌单排序与移动用户脚本",
   "type": "module",
   "scripts": {
     "build": "node build.mjs",
     "check": "node --check ncm-playlist-sort-and-move.user.js",
-    "verify": "npm run build && npm run check"
+    "test": "node --test",
+    "verify": "npm run test && npm run build && npm run check"
   },
   "devDependencies": {
-    "esbuild": "^0.25.0"
+    "esbuild": "^0.25.0",
+    "pinyin-pro": "3.29.3"
   }
 }

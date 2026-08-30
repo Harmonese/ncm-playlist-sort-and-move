@@ -3,6 +3,7 @@ import { sortByPublishDate } from '../operations/sort-by-date.js';
 import { batchMoveSongs } from '../operations/batch-move.js';
 import { batchDeleteSongs } from '../operations/batch-delete.js';
 import { swalClasses } from './styles.js';
+import { showTitleSortDialog } from './dialogs.js';
 
 export async function showFunctionMenu(pid) {
   const result = await Swal.fire({
@@ -21,18 +22,21 @@ export async function showFunctionMenu(pid) {
     didOpen: () => {
       document.getElementById('sort-by-title').addEventListener('click', async () => {
         Swal.close();
-        if (confirm('将直接修改当前歌单内歌曲顺序（不可一键撤销）。继续？')) {
-          try {
-            await sortByTitle(pid);
-          } catch (e) {
-            console.error(e);
-            Swal.fire({
-              icon: 'error',
-              title: '出错',
-              text: e?.message || String(e),
-              customClass: swalClasses
-            });
+        try {
+          const settings = await showTitleSortDialog();
+          if (!settings.isConfirmed) return;
+
+          if (confirm('将直接修改当前歌单内歌曲顺序（不可一键撤销）。继续？')) {
+            await sortByTitle(pid, settings.value);
           }
+        } catch (e) {
+          console.error(e);
+          Swal.fire({
+            icon: 'error',
+            title: '出错',
+            text: e?.message || String(e),
+            customClass: swalClasses
+          });
         }
       });
 
