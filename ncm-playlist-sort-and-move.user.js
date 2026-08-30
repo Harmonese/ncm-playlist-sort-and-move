@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.5.0
+// @version      0.5.1
 // @description  网易云音乐网页版歌单管理工具，支持按标题或发行日期排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -234,6 +234,255 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     return a.id - b.id;
   }
 
+  // src/ui/styles.js
+  var swalClasses = Object.freeze({
+    popup: "ncm-sort-popup",
+    title: "ncm-sort-popup-title",
+    htmlContainer: "ncm-sort-popup-content",
+    confirmButton: "ncm-sort-confirm",
+    cancelButton: "ncm-sort-cancel",
+    closeButton: "ncm-sort-close"
+  });
+  var dangerSwalClasses = Object.freeze({
+    ...swalClasses,
+    popup: "ncm-sort-popup ncm-sort-danger-popup"
+  });
+  function installStyles() {
+    GM_addStyle(`
+    .ncm-sort-title-btn i {
+      font-style: normal;
+    }
+
+    .ncm-sort-popup {
+      width: min(92vw, 460px) !important;
+      padding: 26px 26px 22px !important;
+      border: 1px solid #e1e6e8 !important;
+      border-radius: 14px !important;
+      box-shadow: 0 18px 50px rgba(24, 34, 38, 0.18) !important;
+      color: #263238 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+    }
+
+    .ncm-sort-popup .swal2-title {
+      margin: 0 0 20px !important;
+      padding: 0 !important;
+      color: #20282b !important;
+      font-size: 21px !important;
+      font-weight: 700 !important;
+      line-height: 1.35 !important;
+    }
+
+    .ncm-sort-popup .swal2-html-container {
+      margin: 0 !important;
+      color: #4f5b60 !important;
+      font-size: 14px !important;
+      line-height: 1.6 !important;
+    }
+
+    .ncm-sort-popup .swal2-html-container p {
+      margin: 0;
+    }
+
+    .ncm-sort-popup .swal2-actions {
+      width: 100%;
+      margin: 22px 0 0 !important;
+      gap: 10px;
+    }
+
+    .ncm-sort-popup .swal2-confirm,
+    .ncm-sort-popup .swal2-cancel {
+      min-width: 92px;
+      min-height: 40px;
+      margin: 0 !important;
+      padding: 0 18px !important;
+      border: 0 !important;
+      border-radius: 8px !important;
+      box-shadow: none !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      line-height: 40px !important;
+      transition: background-color 0.15s ease, transform 0.15s ease !important;
+    }
+
+    .ncm-sort-popup .swal2-confirm {
+      background: #2f7d75 !important;
+      color: #fff !important;
+    }
+
+    .ncm-sort-popup .swal2-confirm:hover {
+      background: #256860 !important;
+    }
+
+    .ncm-sort-popup .swal2-cancel {
+      background: #eef1f2 !important;
+      color: #465257 !important;
+    }
+
+    .ncm-sort-popup .swal2-cancel:hover {
+      background: #e1e6e8 !important;
+    }
+
+    .ncm-sort-popup .swal2-confirm:active,
+    .ncm-sort-popup .swal2-cancel:active,
+    .ncm-sort-menu-button:active,
+    .ncm-sort-choice-button:active {
+      transform: translateY(1px);
+    }
+
+    .ncm-sort-danger-popup .swal2-confirm {
+      background: #c84f4f !important;
+    }
+
+    .ncm-sort-danger-popup .swal2-confirm:hover {
+      background: #ad3f3f !important;
+    }
+
+    .ncm-sort-menu,
+    .ncm-sort-choice-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .ncm-sort-menu-button,
+    .ncm-sort-choice-button {
+      display: flex;
+      width: 100%;
+      min-height: 44px;
+      align-items: center;
+      justify-content: flex-start;
+      box-sizing: border-box;
+      margin: 0 !important;
+      padding: 0 16px !important;
+      border: 1px solid #dfe5e7 !important;
+      border-radius: 8px !important;
+      background: #f7f9f9 !important;
+      color: #2e393d !important;
+      font-size: 14px !important;
+      font-weight: 600 !important;
+      line-height: 1.4 !important;
+      text-align: left;
+      cursor: pointer;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease, transform 0.15s ease !important;
+    }
+
+    .ncm-sort-menu-button:hover,
+    .ncm-sort-choice-button:hover {
+      border-color: #73a9a3 !important;
+      background: #edf6f4 !important;
+      color: #205e58 !important;
+    }
+
+    .ncm-sort-menu-button-danger {
+      border-color: #efd0d0 !important;
+      background: #fff7f7 !important;
+      color: #a83e3e !important;
+    }
+
+    .ncm-sort-menu-button-danger:hover {
+      border-color: #d98282 !important;
+      background: #fff0f0 !important;
+      color: #8f3030 !important;
+    }
+
+    .ncm-sort-intro {
+      margin-bottom: 18px !important;
+      text-align: left;
+    }
+
+    .ncm-sort-help {
+      margin-top: 6px !important;
+      color: #6c787d !important;
+      font-size: 13px !important;
+      line-height: 1.55 !important;
+    }
+
+    .ncm-sort-warning {
+      margin-top: 8px !important;
+      color: #bd4848 !important;
+      font-size: 13px !important;
+      line-height: 1.55 !important;
+    }
+
+    .ncm-sort-fields {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      text-align: left;
+    }
+
+    .ncm-sort-fields-two {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .ncm-sort-field {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .ncm-sort-label {
+      color: #4c585d;
+      font-size: 13px;
+      font-weight: 600;
+      line-height: 1.4;
+    }
+
+    .ncm-sort-input.swal2-input {
+      width: 100% !important;
+      height: 42px !important;
+      box-sizing: border-box;
+      margin: 0 !important;
+      padding: 0 10px !important;
+      border: 1px solid #d5dddf !important;
+      border-radius: 8px !important;
+      box-shadow: none !important;
+      color: #263238 !important;
+      font-size: 15px !important;
+    }
+
+    .ncm-sort-input.swal2-input:focus {
+      border-color: #5c9a93 !important;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16) !important;
+      outline: none !important;
+    }
+
+    .ncm-sort-popup .swal2-validation-message {
+      margin: 12px 0 0 !important;
+      border-radius: 8px !important;
+      background: #fff4f4 !important;
+      color: #a83e3e !important;
+      font-size: 13px !important;
+    }
+
+    @media (max-width: 520px) {
+      .ncm-sort-popup {
+        width: calc(100vw - 24px) !important;
+        padding: 22px 18px 18px !important;
+      }
+
+      .ncm-sort-popup .swal2-title {
+        margin-bottom: 16px !important;
+        font-size: 19px !important;
+      }
+
+      .ncm-sort-fields {
+        grid-template-columns: 1fr;
+        gap: 10px;
+      }
+
+      .ncm-sort-popup .swal2-actions {
+        flex-wrap: wrap;
+      }
+
+      .ncm-sort-popup .swal2-confirm,
+      .ncm-sort-popup .swal2-cancel {
+        flex: 1 1 120px;
+      }
+    }
+  `);
+  }
+
   // src/operations/sort-by-title.js
   async function sortByTitle(pid) {
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
@@ -248,13 +497,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         title: "\u6392\u5E8F\u5B8C\u6210",
         text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`
+\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        customClass: swalClasses
       });
     } else {
       Swal.fire({
         icon: "error",
         title: "\u6392\u5E8F\u5931\u8D25",
-        text: JSON.stringify(res)
+        text: JSON.stringify(res),
+        customClass: swalClasses
       });
     }
   }
@@ -276,17 +527,18 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const result = await Swal.fire({
       title: "\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F",
       html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>\u9009\u62E9\u6392\u5E8F\u65B9\u5F0F\uFF1A</p>
       </div>
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="sort-desc" class="swal2-styled" style="width: 100%;">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
-        <button id="sort-asc" class="swal2-styled" style="width: 100%;">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
+      <div class="ncm-sort-choice-list">
+        <button id="sort-desc" class="ncm-sort-choice-button">\u4ECE\u65B0\u5230\u65E7\uFF08\u5012\u5E8F\uFF09</button>
+        <button id="sort-asc" class="ncm-sort-choice-button">\u4ECE\u65E7\u5230\u65B0\uFF08\u987A\u5E8F\uFF09</button>
       </div>
     `,
       showConfirmButton: false,
       showCancelButton: true,
       cancelButtonText: "\u53D6\u6D88",
+      customClass: swalClasses,
       didOpen: () => {
         document.getElementById("sort-desc").addEventListener("click", () => {
           Swal.close();
@@ -303,32 +555,33 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     return Swal.fire({
       title: "\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2",
       html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>\u8F93\u5165\u4E09\u4E2A\u6570\u5B57\u6765\u79FB\u52A8\u6B4C\u66F2\uFF1A</p>
-        <p style="color: #666; font-size: 13px;">
+        <p class="ncm-sort-help">
           \u4F8B\u5982\uFF1A2, 6, 10<br>
           \u8868\u793A\u5C06\u5E8F\u53F7 2-6 \u7684\u6B4C\u66F2\u79FB\u5230\u5E8F\u53F7 10 \u7684\u6B4C\u66F2\u540E\u9762
         </p>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <div style="flex: 1;">
-          <label>\u8D77\u59CB\u4F4D\u7F6E\uFF1A</label>
-          <input id="start-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="\u8D77\u59CB">
-        </div>
-        <div style="flex: 1;">
-          <label>\u7ED3\u675F\u4F4D\u7F6E\uFF1A</label>
-          <input id="end-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="\u7ED3\u675F">
-        </div>
-        <div style="flex: 1;">
-          <label>\u76EE\u6807\u4F4D\u7F6E\uFF1A</label>
-          <input id="target-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="\u76EE\u6807">
-        </div>
+      <div class="ncm-sort-fields">
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">\u8D77\u59CB\u4F4D\u7F6E\uFF1A</span>
+          <input id="start-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u8D77\u59CB">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">\u7ED3\u675F\u4F4D\u7F6E\uFF1A</span>
+          <input id="end-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u7ED3\u675F">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">\u76EE\u6807\u4F4D\u7F6E\uFF1A</span>
+          <input id="target-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u76EE\u6807">
+        </label>
       </div>
     `,
       showCancelButton: true,
       confirmButtonText: "\u5F00\u59CB\u79FB\u52A8",
       cancelButtonText: "\u53D6\u6D88",
       focusConfirm: false,
+      customClass: swalClasses,
       preConfirm: () => {
         const start = parseInt(document.getElementById("start-pos").value);
         const end = parseInt(document.getElementById("end-pos").value);
@@ -353,25 +606,25 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     return Swal.fire({
       title: "\u6279\u91CF\u5220\u9664\u6B4C\u66F2",
       html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>\u8F93\u5165\u4E24\u4E2A\u6570\u5B57\u6765\u5220\u9664\u6B4C\u66F2\uFF1A</p>
-        <p style="color: #666; font-size: 13px;">
+        <p class="ncm-sort-help">
           \u4F8B\u5982\uFF1A2, 6<br>
           \u8868\u793A\u5220\u9664\u5E8F\u53F7 2-6\uFF08\u5305\u542B\uFF09\u7684\u6240\u6709\u6B4C\u66F2
         </p>
-        <p style="color: #e74c3c; font-size: 13px;">
+        <p class="ncm-sort-warning">
           \u26A0\uFE0F \u6B64\u64CD\u4F5C\u4E0D\u53EF\u64A4\u9500\uFF0C\u8BF7\u8C28\u614E\u64CD\u4F5C\uFF01
         </p>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <div style="flex: 1;">
-          <label>\u8D77\u59CB\u4F4D\u7F6E\uFF1A</label>
-          <input id="del-start-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="\u8D77\u59CB">
-        </div>
-        <div style="flex: 1;">
-          <label>\u7ED3\u675F\u4F4D\u7F6E\uFF1A</label>
-          <input id="del-end-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="\u7ED3\u675F">
-        </div>
+      <div class="ncm-sort-fields ncm-sort-fields-two">
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">\u8D77\u59CB\u4F4D\u7F6E\uFF1A</span>
+          <input id="del-start-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u8D77\u59CB">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">\u7ED3\u675F\u4F4D\u7F6E\uFF1A</span>
+          <input id="del-end-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u7ED3\u675F">
+        </label>
       </div>
     `,
       showCancelButton: true,
@@ -379,6 +632,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       cancelButtonText: "\u53D6\u6D88",
       confirmButtonColor: "#e74c3c",
       focusConfirm: false,
+      customClass: dangerSwalClasses,
       preConfirm: () => {
         const start = parseInt(document.getElementById("del-start-pos").value);
         const end = parseInt(document.getElementById("del-end-pos").value);
@@ -406,7 +660,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       showCancelButton: true,
       confirmButtonText: "\u786E\u8BA4\u5220\u9664",
       cancelButtonText: "\u53D6\u6D88",
-      confirmButtonColor: "#e74c3c"
+      confirmButtonColor: "#e74c3c",
+      customClass: dangerSwalClasses
     });
   }
 
@@ -452,13 +707,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           text: `${playlist.name}
 \u5171 ${ordered.length} \u9996
 \u6309\u53D1\u884C\u65E5\u671F${descending ? "\u5012\u5E8F" : "\u987A\u5E8F"}\u6392\u5217
-\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`
+\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+          customClass: swalClasses
         });
       } else {
         Swal.fire({
           icon: "error",
           title: "\u6392\u5E8F\u5931\u8D25",
-          text: JSON.stringify(res)
+          text: JSON.stringify(res),
+          customClass: swalClasses
         });
       }
     } catch (e) {
@@ -466,7 +723,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "error",
         title: "\u51FA\u9519",
-        text: e?.message || String(e)
+        text: e?.message || String(e),
+        customClass: swalClasses
       });
     }
   }
@@ -483,7 +741,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "error",
         title: "\u4F4D\u7F6E\u8D85\u51FA\u8303\u56F4",
-        text: `\u6B4C\u5355\u5171\u6709 ${totalCount} \u9996\u6B4C\u66F2\uFF0C\u8F93\u5165\u7684\u4F4D\u7F6E\u4E0D\u80FD\u8D85\u8FC7\u6B64\u8303\u56F4`
+        text: `\u6B4C\u5355\u5171\u6709 ${totalCount} \u9996\u6B4C\u66F2\uFF0C\u8F93\u5165\u7684\u4F4D\u7F6E\u4E0D\u80FD\u8D85\u8FC7\u6B64\u8303\u56F4`,
+        customClass: swalClasses
       });
       return;
     }
@@ -491,7 +750,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "error",
         title: "\u76EE\u6807\u4F4D\u7F6E\u65E0\u6548",
-        text: `\u76EE\u6807\u4F4D\u7F6E\uFF08${target}\uFF09\u4E0D\u80FD\u5728\u8D77\u59CB\u4F4D\u7F6E\uFF08${start}\uFF09\u548C\u7ED3\u675F\u4F4D\u7F6E\uFF08${end}\uFF09\u4E4B\u95F4`
+        text: `\u76EE\u6807\u4F4D\u7F6E\uFF08${target}\uFF09\u4E0D\u80FD\u5728\u8D77\u59CB\u4F4D\u7F6E\uFF08${start}\uFF09\u548C\u7ED3\u675F\u4F4D\u7F6E\uFF08${end}\uFF09\u4E4B\u95F4`,
+        customClass: swalClasses
       });
       return;
     }
@@ -512,13 +772,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "success",
         title: "\u79FB\u52A8\u5B8C\u6210",
-        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`
+        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        customClass: swalClasses
       });
     } else {
       Swal.fire({
         icon: "error",
         title: "\u79FB\u52A8\u5931\u8D25",
-        text: JSON.stringify(res)
+        text: JSON.stringify(res),
+        customClass: swalClasses
       });
     }
   }
@@ -535,7 +797,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "error",
         title: "\u4F4D\u7F6E\u8D85\u51FA\u8303\u56F4",
-        text: `\u6B4C\u5355\u5171\u6709 ${totalCount} \u9996\u6B4C\u66F2\uFF0C\u8F93\u5165\u7684\u4F4D\u7F6E\u4E0D\u80FD\u8D85\u8FC7\u6B64\u8303\u56F4`
+        text: `\u6B4C\u5355\u5171\u6709 ${totalCount} \u9996\u6B4C\u66F2\uFF0C\u8F93\u5165\u7684\u4F4D\u7F6E\u4E0D\u80FD\u8D85\u8FC7\u6B64\u8303\u56F4`,
+        customClass: swalClasses
       });
       return;
     }
@@ -551,13 +814,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       Swal.fire({
         icon: "success",
         title: "\u5220\u9664\u5B8C\u6210",
-        html: `\u5DF2\u5220\u9664 ${toDeleteCount} \u9996\u6B4C\u66F2<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u7ED3\u679C`
+        html: `\u5DF2\u5220\u9664 ${toDeleteCount} \u9996\u6B4C\u66F2<br>\u5237\u65B0\u9875\u9762\u67E5\u770B\u7ED3\u679C`,
+        customClass: swalClasses
       });
     } else {
       Swal.fire({
         icon: "error",
         title: "\u5220\u9664\u5931\u8D25",
-        text: JSON.stringify(res)
+        text: JSON.stringify(res),
+        customClass: swalClasses
       });
     }
   }
@@ -567,15 +832,16 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     const result = await Swal.fire({
       title: "\u6B4C\u5355\u6392\u5E8F\u5DE5\u5177",
       html: `
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="sort-by-title" class="swal2-styled" style="width: 100%;">\u6309\u6807\u9898\u6392\u5E8F</button>
-        <button id="sort-by-date" class="swal2-styled" style="width: 100%;">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
-        <button id="batch-move" class="swal2-styled" style="width: 100%;">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
-        <button id="batch-delete" class="swal2-styled" style="width: 100%; background-color: #e74c3c;">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
+      <div class="ncm-sort-menu">
+        <button id="sort-by-title" class="ncm-sort-menu-button">\u6309\u6807\u9898\u6392\u5E8F</button>
+        <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
+        <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
+        <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
       </div>
     `,
       showConfirmButton: false,
       showCloseButton: true,
+      customClass: swalClasses,
       didOpen: () => {
         document.getElementById("sort-by-title").addEventListener("click", async () => {
           Swal.close();
@@ -587,7 +853,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
               Swal.fire({
                 icon: "error",
                 title: "\u51FA\u9519",
-                text: e?.message || String(e)
+                text: e?.message || String(e),
+                customClass: swalClasses
               });
             }
           }
@@ -601,7 +868,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             Swal.fire({
               icon: "error",
               title: "\u51FA\u9519",
-              text: e?.message || String(e)
+              text: e?.message || String(e),
+              customClass: swalClasses
             });
           }
         });
@@ -614,7 +882,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             Swal.fire({
               icon: "error",
               title: "\u51FA\u9519",
-              text: e?.message || String(e)
+              text: e?.message || String(e),
+              customClass: swalClasses
             });
           }
         });
@@ -627,7 +896,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             Swal.fire({
               icon: "error",
               title: "\u51FA\u9519",
-              text: e?.message || String(e)
+              text: e?.message || String(e),
+              customClass: swalClasses
             });
           }
         });
@@ -651,7 +921,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         Swal.fire({
           icon: "warning",
           title: "\u672A\u8BC6\u522B\u5230\u6B4C\u5355",
-          text: "\u65E0\u6CD5\u83B7\u53D6\u6B4C\u5355 ID"
+          text: "\u65E0\u6CD5\u83B7\u53D6\u6B4C\u5355 ID",
+          customClass: swalClasses
         });
         return;
       }
@@ -660,7 +931,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     op.appendChild(a);
     return true;
   }
-  GM_addStyle(`.ncm-sort-title-btn i{font-style:normal}`);
+  installStyles();
   setInterval(() => {
     const href = location.href;
     if (href.includes("playlist?id=") || href.includes("/playlist?") || href.includes("#/playlist?")) {

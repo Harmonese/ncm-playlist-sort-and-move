@@ -1,18 +1,21 @@
+import { dangerSwalClasses, swalClasses } from './styles.js';
+
 export async function showDateSortDialog(pid, performDateSort) {
   const result = await Swal.fire({
     title: '按发行日期排序',
     html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>选择排序方式：</p>
       </div>
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="sort-desc" class="swal2-styled" style="width: 100%;">从新到旧（倒序）</button>
-        <button id="sort-asc" class="swal2-styled" style="width: 100%;">从旧到新（顺序）</button>
+      <div class="ncm-sort-choice-list">
+        <button id="sort-desc" class="ncm-sort-choice-button">从新到旧（倒序）</button>
+        <button id="sort-asc" class="ncm-sort-choice-button">从旧到新（顺序）</button>
       </div>
     `,
     showConfirmButton: false,
     showCancelButton: true,
     cancelButtonText: '取消',
+    customClass: swalClasses,
     didOpen: () => {
       document.getElementById('sort-desc').addEventListener('click', () => {
         Swal.close();
@@ -30,32 +33,33 @@ export function showBatchMoveDialog() {
   return Swal.fire({
     title: '批量移动歌曲',
     html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>输入三个数字来移动歌曲：</p>
-        <p style="color: #666; font-size: 13px;">
+        <p class="ncm-sort-help">
           例如：2, 6, 10<br>
           表示将序号 2-6 的歌曲移到序号 10 的歌曲后面
         </p>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <div style="flex: 1;">
-          <label>起始位置：</label>
-          <input id="start-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="起始">
-        </div>
-        <div style="flex: 1;">
-          <label>结束位置：</label>
-          <input id="end-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="结束">
-        </div>
-        <div style="flex: 1;">
-          <label>目标位置：</label>
-          <input id="target-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="目标">
-        </div>
+      <div class="ncm-sort-fields">
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">起始位置：</span>
+          <input id="start-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="起始">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">结束位置：</span>
+          <input id="end-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="结束">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">目标位置：</span>
+          <input id="target-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="目标">
+        </label>
       </div>
     `,
     showCancelButton: true,
     confirmButtonText: '开始移动',
     cancelButtonText: '取消',
     focusConfirm: false,
+    customClass: swalClasses,
     preConfirm: () => {
       const start = parseInt(document.getElementById('start-pos').value);
       const end = parseInt(document.getElementById('end-pos').value);
@@ -85,25 +89,25 @@ export function showBatchDeleteDialog() {
   return Swal.fire({
     title: '批量删除歌曲',
     html: `
-      <div style="text-align: left; margin-bottom: 15px;">
+      <div class="ncm-sort-intro">
         <p>输入两个数字来删除歌曲：</p>
-        <p style="color: #666; font-size: 13px;">
+        <p class="ncm-sort-help">
           例如：2, 6<br>
           表示删除序号 2-6（包含）的所有歌曲
         </p>
-        <p style="color: #e74c3c; font-size: 13px;">
+        <p class="ncm-sort-warning">
           ⚠️ 此操作不可撤销，请谨慎操作！
         </p>
       </div>
-      <div style="display: flex; gap: 10px; align-items: center;">
-        <div style="flex: 1;">
-          <label>起始位置：</label>
-          <input id="del-start-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="起始">
-        </div>
-        <div style="flex: 1;">
-          <label>结束位置：</label>
-          <input id="del-end-pos" type="number" min="1" class="swal2-input" style="margin: 0;" placeholder="结束">
-        </div>
+      <div class="ncm-sort-fields ncm-sort-fields-two">
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">起始位置：</span>
+          <input id="del-start-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="起始">
+        </label>
+        <label class="ncm-sort-field">
+          <span class="ncm-sort-label">结束位置：</span>
+          <input id="del-end-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="结束">
+        </label>
       </div>
     `,
     showCancelButton: true,
@@ -111,6 +115,7 @@ export function showBatchDeleteDialog() {
     cancelButtonText: '取消',
     confirmButtonColor: '#e74c3c',
     focusConfirm: false,
+    customClass: dangerSwalClasses,
     preConfirm: () => {
       const start = parseInt(document.getElementById('del-start-pos').value);
       const end = parseInt(document.getElementById('del-end-pos').value);
@@ -143,6 +148,7 @@ export function showDeleteConfirmation(toDeleteCount, start, end) {
     showCancelButton: true,
     confirmButtonText: '确认删除',
     cancelButtonText: '取消',
-    confirmButtonColor: '#e74c3c'
+    confirmButtonColor: '#e74c3c',
+    customClass: dangerSwalClasses
   });
 }

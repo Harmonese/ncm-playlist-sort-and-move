@@ -1,6 +1,7 @@
 import { q } from './utils/dom.js';
 import { getPlaylistIdFromLocation } from './utils/playlist-url.js';
 import { showFunctionMenu } from './ui/menu.js';
+import { installStyles, swalClasses } from './ui/styles.js';
 
 'use strict';
 
@@ -21,7 +22,8 @@ function injectButton() {
       Swal.fire({
         icon: 'warning',
         title: '未识别到歌单',
-        text: '无法获取歌单 ID'
+        text: '无法获取歌单 ID',
+        customClass: swalClasses
       });
       return;
     }
@@ -32,7 +34,7 @@ function injectButton() {
   return true;
 }
 
-GM_addStyle(`.ncm-sort-title-btn i{font-style:normal}`);
+installStyles();
 
 // SPA: retry inject
 setInterval(() => {

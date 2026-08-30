@@ -2,20 +2,22 @@ import { sortByTitle } from '../operations/sort-by-title.js';
 import { sortByPublishDate } from '../operations/sort-by-date.js';
 import { batchMoveSongs } from '../operations/batch-move.js';
 import { batchDeleteSongs } from '../operations/batch-delete.js';
+import { swalClasses } from './styles.js';
 
 export async function showFunctionMenu(pid) {
   const result = await Swal.fire({
     title: '歌单排序工具',
     html: `
-      <div style="display: flex; flex-direction: column; gap: 10px;">
-        <button id="sort-by-title" class="swal2-styled" style="width: 100%;">按标题排序</button>
-        <button id="sort-by-date" class="swal2-styled" style="width: 100%;">按发行日期排序</button>
-        <button id="batch-move" class="swal2-styled" style="width: 100%;">批量移动歌曲</button>
-        <button id="batch-delete" class="swal2-styled" style="width: 100%; background-color: #e74c3c;">批量删除歌曲</button>
+      <div class="ncm-sort-menu">
+        <button id="sort-by-title" class="ncm-sort-menu-button">按标题排序</button>
+        <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
+        <button id="batch-move" class="ncm-sort-menu-button">批量移动歌曲</button>
+        <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">批量删除歌曲</button>
       </div>
     `,
     showConfirmButton: false,
     showCloseButton: true,
+    customClass: swalClasses,
     didOpen: () => {
       document.getElementById('sort-by-title').addEventListener('click', async () => {
         Swal.close();
@@ -27,7 +29,8 @@ export async function showFunctionMenu(pid) {
             Swal.fire({
               icon: 'error',
               title: '出错',
-              text: e?.message || String(e)
+              text: e?.message || String(e),
+              customClass: swalClasses
             });
           }
         }
@@ -42,7 +45,8 @@ export async function showFunctionMenu(pid) {
           Swal.fire({
             icon: 'error',
             title: '出错',
-            text: e?.message || String(e)
+            text: e?.message || String(e),
+            customClass: swalClasses
           });
         }
       });
@@ -56,7 +60,8 @@ export async function showFunctionMenu(pid) {
           Swal.fire({
             icon: 'error',
             title: '出错',
-            text: e?.message || String(e)
+            text: e?.message || String(e),
+            customClass: swalClasses
           });
         }
       });
@@ -70,7 +75,8 @@ export async function showFunctionMenu(pid) {
           Swal.fire({
             icon: 'error',
             title: '出错',
-            text: e?.message || String(e)
+            text: e?.message || String(e),
+            customClass: swalClasses
           });
         }
       });

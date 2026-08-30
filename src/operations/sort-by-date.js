@@ -3,6 +3,7 @@ import { fetchAlbumDetail, updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { cmpByDate } from '../sort/date.js';
 import { showDateSortDialog } from '../ui/dialogs.js';
+import { swalClasses } from '../ui/styles.js';
 
 export async function sortByPublishDate(pid) {
   const result = await showDateSortDialog(pid, performDateSort);
@@ -50,13 +51,15 @@ export async function performDateSort(pid, descending) {
       Swal.fire({
         icon: 'success',
         title: '排序完成',
-        text: `${playlist.name}\n共 ${ordered.length} 首\n按发行日期${descending ? '倒序' : '顺序'}排列\n刷新页面查看新顺序`
+        text: `${playlist.name}\n共 ${ordered.length} 首\n按发行日期${descending ? '倒序' : '顺序'}排列\n刷新页面查看新顺序`,
+        customClass: swalClasses
       });
     } else {
       Swal.fire({
         icon: 'error',
         title: '排序失败',
-        text: JSON.stringify(res)
+        text: JSON.stringify(res),
+        customClass: swalClasses
       });
     }
   } catch (e) {
@@ -64,7 +67,8 @@ export async function performDateSort(pid, descending) {
     Swal.fire({
       icon: 'error',
       title: '出错',
-      text: e?.message || String(e)
+      text: e?.message || String(e),
+      customClass: swalClasses
     });
   }
 }

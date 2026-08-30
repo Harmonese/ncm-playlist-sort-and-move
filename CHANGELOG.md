@@ -17,6 +17,14 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Renamed the userscript from `untitled.user.js` to `ncm-playlist-sort-and-move.user.js`.
 - Updated userscript metadata with project homepage, support, update, and download links.
 
+## [0.5.1] - 2026-08-30
+
+### Changed
+
+- Unified the userscript UI with shared popup, button, input, spacing, and color styles.
+- Added responsive layouts for batch move and batch delete dialogs.
+- Preserved existing features, text, validation, and operation flows.
+
 ## [0.5.0] - 2026-08-30
 
 ### Changed

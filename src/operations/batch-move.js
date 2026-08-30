@@ -2,6 +2,7 @@ import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { showBatchMoveDialog } from '../ui/dialogs.js';
+import { swalClasses } from '../ui/styles.js';
 
 export async function batchMoveSongs(pid) {
   const result = await showBatchMoveDialog();
@@ -17,7 +18,8 @@ export async function batchMoveSongs(pid) {
     Swal.fire({
       icon: 'error',
       title: '位置超出范围',
-      text: `歌单共有 ${totalCount} 首歌曲，输入的位置不能超过此范围`
+      text: `歌单共有 ${totalCount} 首歌曲，输入的位置不能超过此范围`,
+      customClass: swalClasses
     });
     return;
   }
@@ -26,7 +28,8 @@ export async function batchMoveSongs(pid) {
     Swal.fire({
       icon: 'error',
       title: '目标位置无效',
-      text: `目标位置（${target}）不能在起始位置（${start}）和结束位置（${end}）之间`
+      text: `目标位置（${target}）不能在起始位置（${start}）和结束位置（${end}）之间`,
+      customClass: swalClasses
     });
     return;
   }
@@ -53,13 +56,15 @@ export async function batchMoveSongs(pid) {
     Swal.fire({
       icon: 'success',
       title: '移动完成',
-      html: `已将位置 ${start}-${end} 的歌曲移到位置 ${target} 后面<br>刷新页面查看新顺序`
+      html: `已将位置 ${start}-${end} 的歌曲移到位置 ${target} 后面<br>刷新页面查看新顺序`,
+      customClass: swalClasses
     });
   } else {
     Swal.fire({
       icon: 'error',
       title: '移动失败',
-      text: JSON.stringify(res)
+      text: JSON.stringify(res),
+      customClass: swalClasses
     });
   }
 }
