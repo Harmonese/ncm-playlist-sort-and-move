@@ -6,6 +6,7 @@ import { manualSortSongs } from '../operations/manual-sort.js';
 import { batchMoveSongs } from '../operations/batch-move.js';
 import { batchDeleteSongs } from '../operations/batch-delete.js';
 import { restoreLastOrder } from '../operations/restore-order.js';
+import { editPlaylistScript } from '../operations/playlist-script.js';
 import { loadOrderBackup } from '../settings/order-backup.js';
 import { swalClasses } from './styles.js';
 
@@ -16,6 +17,7 @@ export async function showFunctionMenu(pid) {
     title: '歌单排序工具',
     html: `
       <div class="ncm-sort-menu">
+        <button id="playlist-script" class="ncm-sort-menu-button">歌单编排脚本</button>
         <button id="sort-by-title" class="ncm-sort-menu-button">按标题排序</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">按歌手排序</button>
@@ -30,6 +32,21 @@ export async function showFunctionMenu(pid) {
     showCloseButton: true,
     customClass: swalClasses,
     didOpen: () => {
+      document.getElementById('playlist-script').addEventListener('click', async () => {
+        Swal.close();
+        try {
+          await editPlaylistScript(pid);
+        } catch (e) {
+          console.error(e);
+          Swal.fire({
+            icon: 'error',
+            title: '出错',
+            text: e?.message || String(e),
+            customClass: swalClasses
+          });
+        }
+      });
+
       document.getElementById('sort-by-title').addEventListener('click', async () => {
         Swal.close();
         try {

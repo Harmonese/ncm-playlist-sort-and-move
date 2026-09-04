@@ -7,6 +7,8 @@ import { loadTitleSortConfig } from '../settings/title-sort.js';
 import { loadArtistSortSettings } from '../settings/artist-sort.js';
 import { loadDateSortSettings } from '../settings/date-sort.js';
 import { HEAT_SORT_METRICS, normalizeHeatSortConfig } from '../sort/heat.js';
+import { getPlaylistScriptDiff, parsePlaylistScript } from '../data/playlist-script.js';
+import { showToast } from '../utils/dom.js';
 
 function getVisibleTextCategories(categoryIds) {
   const requestedIds = Array.isArray(categoryIds)
@@ -710,12 +712,360 @@ export function showHeatSortDialog(savedConfig) {
   });
 }
 
+export function showPlaylistScriptDialog(scriptText, {
+  playlistName = '当前歌单',
+  currentCount = 0,
+  currentScript = scriptText,
+  currentItems = [],
+  resolveScript = null,
+  warning = ''
+} = {}) {
+  return Swal.fire({
+    title: '歌单编排脚本',
+    html: `
+      <div class="ncm-sort-script-editor">
+        <div class="ncm-sort-intro">
+          <p>${escapeHtml(playlistName)}</p>
+          <p class="ncm-sort-help">按顺序写入 song &lt;歌曲ID&gt; 或 album &lt;专辑ID&gt;，专辑会按曲目顺序展开。</p>
+          <p class="ncm-sort-detected">当前歌单：${currentCount} 首歌曲</p>
+          ${warning ? `<p class="ncm-sort-script-warning">${escapeHtml(warning)}</p>` : ''}
+        </div>
+        <div id="playlist-script-live-summary" class="ncm-sort-script-live-summary"></div>
+        <div class="ncm-sort-script-columns">
+          <div class="ncm-sort-script-preview-panel">
+            <div class="ncm-sort-script-panel-title">实时预览</div>
+            <div class="ncm-sort-script-scroll-wrap">
+              <div id="playlist-script-live-preview" class="ncm-sort-script-live-preview"></div>
+            </div>
+          </div>
+          <div class="ncm-sort-script-command-panel">
+            <div class="ncm-sort-script-panel-title">编排命令</div>
+            <div class="ncm-sort-script-scroll-wrap">
+              <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
+              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
+            </div>
+            <div class="ncm-sort-script-toolbar">
+              <button id="playlist-script-reset" type="button" class="ncm-sort-script-tool-button">从当前歌单重新生成</button>
+              <button id="playlist-script-copy" type="button" class="ncm-sort-script-tool-button">复制脚本</button>
+            </div>
+          </div>
+        </div>
+        <p class="ncm-sort-script-help">脚本是完整歌单声明。应用后，当前歌单中未出现在脚本里的歌曲会被移除。</p>
+      </div>
+    `,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '解析预览',
+    cancelButtonText: '取消',
+    focusConfirm: false,
+    customClass: {
+      ...swalClasses,
+      popup: 'ncm-sort-popup ncm-sort-script-popup'
+    },
+    didOpen: () => {
+      const editor = document.getElementById('playlist-script-editor');
+      const preview = document.getElementById('playlist-script-live-preview');
+      const summary = document.getElementById('playlist-script-live-summary');
+      const activeLine = document.getElementById('playlist-script-active-line');
+      let updateTimer = 0;
+      let updateSequence = 0;
+      let isScrollSyncing = false;
+
+      const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+
+      const getPreviewRows = () => [...preview.querySelectorAll('[data-source-line]')];
+
+      const getPreviewRowPosition = (row) => {
+        const previewRect = preview.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        return {
+          top: rowRect.top - previewRect.top + preview.scrollTop,
+          height: rowRect.height
+        };
+      };
+
+      const getEditorLineMetrics = () => {
+        const styles = getComputedStyle(editor);
+        const lineHeight = Number.parseFloat(styles.lineHeight) || 21.45;
+        const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+        return { lineHeight, paddingTop };
+      };
+
+      const interpolateAnchors = (value, anchors, sourceKey, targetKey) => {
+        if (anchors.length === 1) return anchors[0][targetKey];
+
+        if (value <= anchors[0][sourceKey]) {
+          return anchors[0][targetKey];
+        }
+        const last = anchors.length - 1;
+        if (value >= anchors[last][sourceKey]) {
+          return anchors[last][targetKey];
+        }
+
+        for (let index = 0; index < last; index += 1) {
+          const start = anchors[index];
+          const end = anchors[index + 1];
+          if (value > end[sourceKey]) continue;
+          const distance = end[sourceKey] - start[sourceKey];
+          const fraction = distance > 0
+            ? (value - start[sourceKey]) / distance
+            : 0;
+          return start[targetKey] + fraction * (end[targetKey] - start[targetKey]);
+        }
+
+        return anchors[last][targetKey];
+      };
+
+      // 两侧内容高度不同，使用命令组中心作为锚点，并在相邻锚点之间连续插值。
+      const syncScroll = (source, target) => {
+        if (isScrollSyncing) return;
+        const rows = getPreviewRows();
+        if (!rows.length) return;
+
+        const { lineHeight, paddingTop } = getEditorLineMetrics();
+        const previewAnchors = rows.map((row) => {
+          const position = getPreviewRowPosition(row);
+          return {
+            position: position.top + position.height / 2,
+            line: paddingTop + (Number(row.dataset.sourceLine) - 0.5) * lineHeight
+          };
+        });
+        const editorAnchors = previewAnchors.map(anchor => ({
+          position: anchor.line,
+          line: anchor.position
+        }));
+
+        const activeSourcePosition = source === preview
+          ? source.scrollTop + source.clientHeight / 2
+          : source.scrollTop + source.clientHeight / 2;
+        const activeAnchors = source === preview ? previewAnchors : editorAnchors;
+        const activeIndex = activeAnchors.reduce((bestIndex, anchor, index) => {
+          const bestDistance = Math.abs(activeAnchors[bestIndex].position - activeSourcePosition);
+          const distance = Math.abs(anchor.position - activeSourcePosition);
+          return distance < bestDistance ? index : bestIndex;
+        }, 0);
+        rows.forEach((row, index) => row.classList.toggle('is-active', index === activeIndex));
+        const activeLineNumber = Number(rows[activeIndex].dataset.sourceLine);
+        activeLine.style.top = `${paddingTop + (activeLineNumber - 1) * lineHeight - editor.scrollTop}px`;
+        activeLine.dataset.line = String(activeLineNumber);
+        activeLine.dataset.order = rows[activeIndex].dataset.songOrder;
+        activeLine.style.display = 'block';
+
+        let targetCenter;
+        if (source === preview) {
+          const sourceCenter = source.scrollTop + source.clientHeight / 2;
+          targetCenter = interpolateAnchors(sourceCenter, previewAnchors, 'position', 'line');
+        } else {
+          const sourceCenter = source.scrollTop + source.clientHeight / 2;
+          targetCenter = interpolateAnchors(sourceCenter, editorAnchors, 'position', 'line');
+        }
+
+        const targetScrollTop = targetCenter - target.clientHeight / 2;
+        isScrollSyncing = true;
+        target.scrollTop = clamp(targetScrollTop, 0, target.scrollHeight - target.clientHeight);
+        requestAnimationFrame(() => {
+          isScrollSyncing = false;
+        });
+      };
+
+      preview.addEventListener('scroll', () => syncScroll(preview, editor));
+      editor.addEventListener('scroll', () => syncScroll(editor, preview));
+
+      const renderPreview = ({ commands = [], expanded = null, error = '', loading = false } = {}) => {
+        if (loading) {
+          summary.innerHTML = '<span class="is-loading">正在解析脚本和专辑……</span>';
+          preview.innerHTML = '';
+          activeLine.style.display = 'none';
+          return;
+        }
+        if (error) {
+          summary.innerHTML = `<span class="is-error">${escapeHtml(error)}</span>`;
+          preview.innerHTML = '';
+          activeLine.style.display = 'none';
+          return;
+        }
+        if (!expanded) {
+          summary.innerHTML = '<span>输入命令后显示预览。</span>';
+          preview.innerHTML = '';
+          activeLine.style.display = 'none';
+          return;
+        }
+
+        const currentIds = currentItems.map(item => String(item.id));
+        const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
+        const currentMap = new Map(currentItems.map(item => [String(item.id), item]));
+        const addedSet = new Set(diff.addedIds);
+        const commandBlocks = new Map(expanded.blocks.map(block => [block.line, block]));
+        let targetSongOffset = 0;
+        const rows = commands.map((command) => {
+          const block = commandBlocks.get(command.line);
+          const songStart = targetSongOffset + 1;
+          const songEnd = targetSongOffset + block.songIds.length;
+          targetSongOffset = songEnd;
+          const isAlbum = command.type === 'album';
+          const blockAddedCount = block.songIds.filter(id => addedSet.has(String(id))).length;
+          const marker = blockAddedCount === block.songIds.length ? '+' : blockAddedCount ? '~' : '·';
+          const firstItem = block.items?.[0] || { id: block.songIds[0] };
+          const title = isAlbum
+            ? block.albumName || `专辑 ${command.id}`
+            : currentMap.get(String(command.id))?.title || firstItem.title || `歌曲 ${command.id}`;
+          const meta = isAlbum
+            ? `${block.albumArtist ? `${block.albumArtist} · ` : ''}${block.songIds.length} 首歌曲`
+            : [currentMap.get(String(command.id))?.artist, currentMap.get(String(command.id))?.album]
+              .filter(Boolean).join(' · ') || `ID ${command.id}`;
+          const trackRows = isAlbum
+            ? block.songIds.map((id, index) => {
+              const item = currentMap.get(String(id)) || block.items?.[index] || { id };
+              const isTrackAdded = addedSet.has(String(id));
+              return `
+                <li class="ncm-sort-script-track-row ${isTrackAdded ? 'is-added' : ''}">
+                  <span class="ncm-sort-script-track-marker">${isTrackAdded ? '+' : '·'}</span>
+                  <span class="ncm-sort-script-preview-details">
+                    <span>${escapeHtml(item.title || `歌曲 ${id}`)}</span>
+                    <small>${escapeHtml([item.artist, item.album].filter(Boolean).join(' · ') || `ID ${id}`)}</small>
+                  </span>
+                  <code>${escapeHtml(id)}</code>
+                </li>
+              `;
+            }).join('')
+            : '';
+
+          return `
+            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group">
+              <div class="ncm-sort-script-preview-row ${blockAddedCount ? 'is-added' : ''}">
+                <span class="ncm-sort-script-preview-marker">${marker}</span>
+                <span class="ncm-sort-script-preview-details">
+                  <span>${escapeHtml(title)}</span>
+                  <small>${escapeHtml(meta)}</small>
+                </span>
+                <code>${escapeHtml(command.id)}</code>
+              </div>
+              ${trackRows ? `<ol class="ncm-sort-script-track-list">${trackRows}</ol>` : ''}
+            </li>
+          `;
+        }).join('');
+        summary.innerHTML = `
+            <span>命令 <strong>${commands.length}</strong></span>
+            <span>目标 <strong>${expanded.songIds.length}</strong></span>
+            <span class="is-added">新增 <strong>${diff.addedIds.length}</strong></span>
+            <span class="is-removed">移除 <strong>${diff.removedIds.length}</strong></span>
+            <span>顺序 <strong>${diff.changedOrder ? '变化' : '不变'}</strong></span>
+        `;
+        preview.innerHTML = `<ol class="ncm-sort-script-preview-list">${rows}</ol>`;
+        requestAnimationFrame(() => syncScroll(preview, editor));
+      };
+
+      const updatePreview = async () => {
+        const sequence = ++updateSequence;
+        let commands;
+        try {
+          commands = parsePlaylistScript(editor.value);
+        } catch (error) {
+          renderPreview({ error: error.message });
+          return;
+        }
+
+        if (!resolveScript) {
+          renderPreview();
+          return;
+        }
+
+        renderPreview({ loading: true });
+        try {
+          const expanded = await resolveScript(commands);
+          if (sequence === updateSequence) renderPreview({ commands, expanded });
+        } catch (error) {
+          if (sequence === updateSequence) renderPreview({ error: error.message || String(error) });
+        }
+      };
+
+      editor.addEventListener('input', () => {
+        clearTimeout(updateTimer);
+        updateTimer = setTimeout(updatePreview, 280);
+      });
+
+      document.getElementById('playlist-script-reset').addEventListener('click', () => {
+        editor.value = currentScript;
+        editor.focus();
+        updatePreview();
+      });
+      document.getElementById('playlist-script-copy').addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(editor.value);
+          editor.focus();
+          showToast('脚本已复制到剪贴板');
+        } catch (error) {
+          editor.focus();
+          editor.select();
+          showToast('无法直接访问剪贴板，已选中脚本内容，请手动复制');
+        }
+      });
+
+      updatePreview();
+    },
+    preConfirm: () => {
+      const value = document.getElementById('playlist-script-editor').value;
+      try {
+        parsePlaylistScript(value);
+      } catch (error) {
+        Swal.showValidationMessage(error.message);
+        return false;
+      }
+      return { scriptText: value };
+    }
+  });
+}
+
+export function showPlaylistScriptPreviewDialog({
+  playlistName = '当前歌单',
+  commandCount,
+  targetCount,
+  addedCount,
+  removedCount,
+  changedOrder,
+  albumCount,
+  externalChange = false
+}) {
+  const warning = externalChange
+    ? '<p class="ncm-sort-script-warning">当前歌单已偏离上次应用后的状态。确认后将按照这份脚本覆盖当前变化。</p>'
+    : '';
+
+  return Swal.fire({
+    title: '预览歌单编排',
+    html: `
+      <div class="ncm-sort-script-preview">
+        <div class="ncm-sort-intro">
+          <p>${escapeHtml(playlistName)}</p>
+          ${warning}
+        </div>
+        <div class="ncm-sort-script-summary">
+          <div><span>脚本命令</span><strong>${commandCount}</strong></div>
+          <div><span>展开后歌曲</span><strong>${targetCount}</strong></div>
+          <div><span>新增歌曲</span><strong>${addedCount}</strong></div>
+          <div><span>移除歌曲</span><strong>${removedCount}</strong></div>
+          <div><span>专辑命令</span><strong>${albumCount}</strong></div>
+          <div><span>顺序变化</span><strong>${changedOrder ? '有' : '无'}</strong></div>
+        </div>
+        <p class="ncm-sort-script-help">确认后会保存当前顺序备份，并将歌单写回为脚本展开后的结果。</p>
+      </div>
+    `,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '确认写回',
+    cancelButtonText: '返回编辑',
+    focusConfirm: false,
+    customClass: externalChange ? dangerSwalClasses : swalClasses
+  });
+}
+
 export function showRestoreOrderDialog(backup) {
   const createdAt = backup.createdAt
     ? new Date(backup.createdAt).toLocaleString()
     : '未知时间';
   const operationText = backup.operation === 'delete'
     ? `将重新加入 ${backup.removedSongIds.length} 首已删除歌曲并恢复顺序`
+    : backup.operation === 'script'
+      ? `将移除 ${backup.addedSongIds.length} 首新增歌曲、重新加入 ${backup.removedSongIds.length} 首歌曲并恢复顺序`
     : backup.operation === 'move'
       ? '将恢复移动前的歌曲顺序'
       : '将恢复排序前的歌曲顺序';

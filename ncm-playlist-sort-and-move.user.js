@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.8.0
-// @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
+// @version      0.9.0
+// @description  网易云音乐网页版歌单管理工具，支持歌单编排脚本、排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
 // @icon         https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/assets/icon.png
@@ -485,6 +485,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
     .ncm-sort-manual-popup {
       width: min(92vw, 720px) !important;
+    }
+
+    .ncm-sort-script-popup {
+      width: min(92vw, 760px) !important;
     }
 
     .ncm-sort-popup .swal2-title {
@@ -1015,6 +1019,384 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       line-height: 1.55 !important;
     }
 
+    .ncm-sort-script-editor,
+    .ncm-sort-script-preview {
+      text-align: left;
+    }
+
+    .ncm-sort-script-columns {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 14px;
+      text-align: left;
+    }
+
+    .ncm-sort-script-preview-panel,
+    .ncm-sort-script-command-panel {
+      min-width: 0;
+    }
+
+    .ncm-sort-script-panel-title {
+      margin-bottom: 7px;
+      color: #3e4a4f;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-live-preview {
+      min-height: min(58vh, 520px);
+      max-height: min(58vh, 520px);
+      box-sizing: border-box;
+      overflow-y: auto;
+      padding: 10px;
+      border: 1px solid #e0e6e8;
+      border-radius: 8px;
+      background: #fbfcfc;
+      scrollbar-color: #a9c8c4 #f1f5f4;
+      scrollbar-width: thin;
+    }
+
+    .ncm-sort-script-scroll-wrap {
+      position: relative;
+    }
+
+    .ncm-sort-script-active-line {
+      position: absolute;
+      display: none;
+      z-index: 3;
+      right: 1px;
+      left: 1px;
+      height: 21.45px;
+      box-sizing: border-box;
+      border-top: 1px solid rgba(47, 125, 117, 0.36);
+      border-bottom: 1px solid rgba(47, 125, 117, 0.36);
+      background: rgba(92, 154, 147, 0.12);
+      pointer-events: none;
+    }
+
+    .ncm-sort-script-active-line::after {
+      position: absolute;
+      top: -1px;
+      right: 7px;
+      padding: 1px 4px;
+      border-radius: 3px;
+      background: rgba(47, 125, 117, 0.9);
+      color: #fff;
+      content: attr(data-order);
+      font-size: 10px;
+      line-height: 18px;
+    }
+
+    .ncm-sort-script-live-summary {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 5px 9px;
+      margin-bottom: 7px;
+      color: #58666a;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-live-summary strong {
+      color: #2e393d;
+      font-size: 13px;
+    }
+
+    .ncm-sort-script-live-summary .is-added,
+    .ncm-sort-script-preview-row.is-added .ncm-sort-script-preview-marker {
+      color: #2f7d75;
+    }
+
+    .ncm-sort-script-live-summary .is-removed {
+      color: #a83e3e;
+    }
+
+    .ncm-sort-script-live-summary .is-loading,
+    .ncm-sort-script-live-summary .is-error {
+      grid-column: 1 / -1;
+    }
+
+    .ncm-sort-script-live-summary .is-loading {
+      color: #6c787d;
+    }
+
+    .ncm-sort-script-live-summary .is-error {
+      color: #a83e3e;
+    }
+
+    .ncm-sort-script-preview-list {
+      display: grid;
+      gap: 4px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ncm-sort-script-preview-group {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ncm-sort-script-track-list {
+      display: grid;
+      gap: 3px;
+      margin: 4px 0 0 18px;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ncm-sort-script-track-row {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 6px;
+      box-sizing: border-box;
+      padding: 4px;
+      border-left: 2px solid #dce9e7;
+      color: #58666a;
+      font-size: 11px;
+    }
+
+    .ncm-sort-script-track-row.is-added {
+      border-left-color: #73a9a3;
+      background: #f1f8f7;
+      color: #2f7d75;
+    }
+
+    .ncm-sort-script-track-marker {
+      width: 12px;
+      flex: 0 0 12px;
+      color: #93a0a3;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .ncm-sort-script-track-row.is-added .ncm-sort-script-track-marker {
+      color: #2f7d75;
+    }
+
+    .ncm-sort-script-preview-row {
+      display: flex;
+      min-width: 0;
+      align-items: center;
+      gap: 6px;
+      padding: 5px 4px;
+      border-bottom: 1px solid #edf1f1;
+      color: #344146;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-preview-source-row {
+      box-sizing: border-box;
+      overflow: hidden;
+      padding: 5px 4px;
+      border-bottom: 1px solid #edf1f1;
+    }
+
+    .ncm-sort-script-preview-source-row.is-blank {
+      min-height: 21.45px;
+      height: 21.45px;
+      padding: 0;
+      border-bottom-color: transparent;
+      background: transparent;
+    }
+
+    .ncm-sort-script-preview-source-row.is-comment {
+      min-height: 21.45px;
+      height: 21.45px;
+      display: block;
+      overflow: hidden;
+      padding: 0 4px;
+      color: #829093;
+      font: 12px/21.45px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ncm-sort-script-preview-row.is-added {
+      background: #f1f8f7;
+    }
+
+    .ncm-sort-script-preview-group.is-active > .ncm-sort-script-preview-row {
+      border-color: #5c9a93;
+      box-shadow: 0 0 0 2px rgba(92, 154, 147, 0.16);
+    }
+
+    .ncm-sort-script-preview-marker {
+      width: 12px;
+      flex: 0 0 12px;
+      color: #93a0a3;
+      font-weight: 700;
+      text-align: center;
+    }
+
+    .ncm-sort-script-preview-details {
+      display: grid;
+      min-width: 0;
+      gap: 1px;
+      flex: 1 1 auto;
+    }
+
+    .ncm-sort-script-preview-details > span {
+      overflow-wrap: anywhere;
+    }
+
+    .ncm-sort-script-preview-details small {
+      overflow-wrap: anywhere;
+      color: #7a8588;
+      font-size: 10px;
+    }
+
+    .ncm-sort-script-preview-row code {
+      flex: 0 0 auto;
+      color: #829093;
+      font-size: 10px;
+    }
+
+    .ncm-sort-script-removed-title {
+      margin: 12px 0 5px;
+      color: #a83e3e;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-removed-list {
+      display: grid;
+      gap: 3px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .ncm-sort-script-removed-list li {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 4px;
+      background: #fff7f7;
+      color: #704747;
+      font-size: 11px;
+    }
+
+    .ncm-sort-script-removed-list span {
+      overflow-wrap: anywhere;
+    }
+
+    .ncm-sort-script-removed-list code {
+      flex: 0 0 auto;
+      color: #ad7777;
+      font-size: 10px;
+    }
+
+    .ncm-sort-script-preview-state,
+    .ncm-sort-script-preview-error {
+      margin: 0 !important;
+      color: #6c787d !important;
+      font-size: 12px !important;
+      line-height: 1.55 !important;
+    }
+
+    .ncm-sort-script-preview-error {
+      color: #a83e3e !important;
+    }
+
+    .ncm-sort-script-textarea {
+      display: block;
+      width: 100%;
+      min-height: min(58vh, 520px);
+      max-height: min(58vh, 520px);
+      box-sizing: border-box;
+      resize: vertical;
+      overflow-y: auto;
+      padding: 10px 14px;
+      border: 1px solid #d5dddf;
+      border-radius: 8px;
+      outline: none;
+      background: #fbfcfc;
+      color: #263238;
+      font: 13px/1.65 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      tab-size: 2;
+    }
+
+    .ncm-sort-script-textarea:focus {
+      border-color: #5c9a93;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+      background: #fff;
+    }
+
+    .ncm-sort-script-toolbar {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 9px;
+    }
+
+    .ncm-sort-script-tool-button {
+      min-height: 32px;
+      margin: 0 !important;
+      padding: 0 11px !important;
+      border: 1px solid #d5dddf;
+      border-radius: 6px;
+      background: #fff;
+      color: #4c585d;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-script-tool-button:hover {
+      border-color: #73a9a3;
+      background: #edf6f4;
+      color: #205e58;
+    }
+
+    .ncm-sort-script-help {
+      margin: 9px 0 0 !important;
+      color: #6c787d !important;
+      font-size: 12px !important;
+      line-height: 1.5 !important;
+    }
+
+    .ncm-sort-script-warning {
+      margin-top: 9px !important;
+      padding: 9px 11px;
+      border: 1px solid #efd0d0;
+      border-radius: 7px;
+      background: #fff7f7;
+      color: #a83e3e !important;
+      font-size: 13px !important;
+      line-height: 1.55 !important;
+    }
+
+    .ncm-sort-script-summary {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin: 12px 0 0;
+    }
+
+    .ncm-sort-script-summary > div {
+      display: flex;
+      min-height: 64px;
+      flex-direction: column;
+      justify-content: center;
+      gap: 4px;
+      box-sizing: border-box;
+      padding: 10px 12px;
+      border: 1px solid #e0e6e8;
+      border-radius: 8px;
+      background: #fbfcfc;
+    }
+
+    .ncm-sort-script-summary span {
+      color: #6c787d;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-summary strong {
+      color: #2e393d;
+      font-size: 18px;
+    }
+
     .ncm-sort-fields {
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1077,6 +1459,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         width: calc(100vw - 24px) !important;
       }
 
+      .ncm-sort-script-popup {
+        width: calc(100vw - 24px) !important;
+      }
+
       .ncm-sort-popup .swal2-title {
         margin-bottom: 16px !important;
         font-size: 19px !important;
@@ -1104,6 +1490,19 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       .ncm-sort-fields {
         grid-template-columns: 1fr;
         gap: 10px;
+      }
+
+      .ncm-sort-script-summary {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .ncm-sort-script-columns {
+        grid-template-columns: 1fr;
+      }
+
+      .ncm-sort-script-live-preview {
+        min-height: 220px;
+        max-height: 34vh;
       }
 
       .ncm-sort-popup .swal2-actions {
@@ -1324,6 +1723,161 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
   function sortSongsByHeat(items, config = DEFAULT_HEAT_SORT_CONFIG) {
     return stableSort(items, cmpByHeat(config));
+  }
+
+  // src/data/playlist-script.js
+  var PLAYLIST_SCRIPT_VERSION = 1;
+  function normalizeId(value) {
+    const id = String(value ?? "").trim();
+    return /^[1-9]\d*$/.test(id) ? id : null;
+  }
+  function createScriptError(message, line = null) {
+    const error = new Error(line ? `\u7B2C ${line} \u884C\uFF1A${message}` : message);
+    error.name = "PlaylistScriptError";
+    error.line = line;
+    return error;
+  }
+  function parsePlaylistScript(text) {
+    if (typeof text !== "string") {
+      throw createScriptError("\u811A\u672C\u5185\u5BB9\u5FC5\u987B\u662F\u6587\u672C");
+    }
+    const commands = [];
+    const lines = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
+    lines.forEach((rawLine, index) => {
+      const lineNumber = index + 1;
+      const line = rawLine.trim();
+      if (!line) return;
+      if (line.startsWith("#")) {
+        const header = line.match(/^#\s*ncm-playlist\s*:\s*(\d+)$/i);
+        if (header && Number(header[1]) !== PLAYLIST_SCRIPT_VERSION) {
+          throw createScriptError(`\u4E0D\u652F\u6301\u7684\u811A\u672C\u7248\u672C\uFF1A${header[1]}`, lineNumber);
+        }
+        return;
+      }
+      const match = line.match(/^(song|album)\s+(\S+)$/i);
+      if (!match) {
+        throw createScriptError("\u53EA\u652F\u6301 song <\u6B4C\u66F2ID> \u6216 album <\u4E13\u8F91ID>", lineNumber);
+      }
+      const id = normalizeId(match[2]);
+      if (!id) {
+        throw createScriptError("ID \u5FC5\u987B\u662F\u6B63\u6574\u6570", lineNumber);
+      }
+      commands.push({ type: match[1].toLowerCase(), id, line: lineNumber });
+    });
+    if (!commands.length) {
+      throw createScriptError("\u811A\u672C\u81F3\u5C11\u9700\u8981\u5305\u542B\u4E00\u6761 song \u6216 album \u547D\u4EE4");
+    }
+    return commands;
+  }
+  function buildPlaylistScript(songIds) {
+    if (!Array.isArray(songIds) || !songIds.length) {
+      throw createScriptError("\u65E0\u6CD5\u4E3A\u6CA1\u6709\u6B4C\u66F2\u7684\u6B4C\u5355\u751F\u6210\u811A\u672C");
+    }
+    const lines = songIds.map((id) => {
+      const normalizedId = normalizeId(id);
+      if (!normalizedId) throw createScriptError(`\u65E0\u6548\u6B4C\u66F2 ID\uFF1A${id}`);
+      return `song ${normalizedId}`;
+    });
+    return lines.join("\n");
+  }
+  function getAlbumSongs(response) {
+    if (!response || response.code !== 200) return null;
+    const nestedSongs = response.album?.songs;
+    if (Array.isArray(nestedSongs) && nestedSongs.length) return nestedSongs;
+    if (Array.isArray(response.songs) && response.songs.length) return response.songs;
+    return Array.isArray(nestedSongs) ? nestedSongs : null;
+  }
+  async function expandPlaylistScript(commands, {
+    fetchAlbum = fetchAlbumDetail
+  } = {}) {
+    if (!Array.isArray(commands) || !commands.length) {
+      throw createScriptError("\u6CA1\u6709\u53EF\u6267\u884C\u7684\u811A\u672C\u547D\u4EE4");
+    }
+    const songIds = [];
+    const blocks = [];
+    const items = [];
+    const albumCache = /* @__PURE__ */ new Map();
+    for (const command of commands) {
+      if (command.type === "song") {
+        songIds.push(command.id);
+        const songItem = { id: command.id };
+        blocks.push({ ...command, songIds: [command.id], items: [songItem] });
+        items.push(songItem);
+        continue;
+      }
+      let response = albumCache.get(command.id);
+      if (!response) {
+        try {
+          response = await fetchAlbum(command.id);
+          albumCache.set(command.id, response);
+        } catch (error) {
+          throw createScriptError(`\u83B7\u53D6\u4E13\u8F91 ${command.id} \u5931\u8D25\uFF1A${error?.message || String(error)}`, command.line);
+        }
+      }
+      const songs = getAlbumSongs(response);
+      if (!songs) {
+        throw createScriptError(`\u65E0\u6CD5\u83B7\u53D6\u4E13\u8F91 ${command.id} \u7684\u66F2\u76EE`, command.line);
+      }
+      const albumSongIds = songs.map((song) => normalizeId(song?.id)).filter(Boolean);
+      if (!albumSongIds.length) {
+        throw createScriptError(`\u4E13\u8F91 ${command.id} \u6CA1\u6709\u53EF\u7528\u6B4C\u66F2`, command.line);
+      }
+      songIds.push(...albumSongIds);
+      items.push(...songs.map((song) => toSongItem(song)));
+      blocks.push({
+        ...command,
+        songIds: albumSongIds,
+        items: songs.map((song) => toSongItem(song)),
+        albumName: response.album?.name || "",
+        albumArtist: response.album?.artist?.name || response.album?.artists?.map((a) => a.name).join("/") || ""
+      });
+    }
+    const seenIds = /* @__PURE__ */ new Set();
+    const duplicateIds = /* @__PURE__ */ new Set();
+    for (const id of songIds) {
+      if (seenIds.has(id)) duplicateIds.add(id);
+      seenIds.add(id);
+    }
+    if (duplicateIds.size) {
+      throw createScriptError(`\u5C55\u5F00\u540E\u5B58\u5728\u91CD\u590D\u6B4C\u66F2\uFF1A${[...duplicateIds].join("\u3001")}`);
+    }
+    return { songIds, blocks, items };
+  }
+  function getPlaylistScriptDiff(currentIds, targetIds) {
+    const current = currentIds.map((id) => String(id));
+    const target = targetIds.map((id) => String(id));
+    const currentSet = new Set(current);
+    const targetSet = new Set(target);
+    const addedIds = target.filter((id) => !currentSet.has(id));
+    const removedIds = current.filter((id) => !targetSet.has(id));
+    const currentCommon = current.filter((id) => targetSet.has(id));
+    const targetCommon = target.filter((id) => currentSet.has(id));
+    return {
+      addedIds,
+      removedIds,
+      changedOrder: !sameSongOrder(currentCommon, targetCommon)
+    };
+  }
+  function sameSongOrder(left, right) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
+  }
+  function getPlaylistScriptState(currentSongIds, savedScript) {
+    if (!savedScript) {
+      return {
+        hasSavedScript: false,
+        currentChanged: false,
+        localChanged: false,
+        conflicted: false
+      };
+    }
+    const currentChanged = !sameSongOrder(currentSongIds, savedScript.appliedSongIds);
+    const localChanged = savedScript.scriptText !== savedScript.appliedScriptText;
+    return {
+      hasSavedScript: true,
+      currentChanged,
+      localChanged,
+      conflicted: currentChanged && localChanged
+    };
   }
 
   // src/ui/dialogs.js
@@ -1947,9 +2501,315 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       preConfirm: () => readHeatSortConfig()
     });
   }
+  function showPlaylistScriptDialog(scriptText, {
+    playlistName = "\u5F53\u524D\u6B4C\u5355",
+    currentCount = 0,
+    currentScript = scriptText,
+    currentItems = [],
+    resolveScript = null,
+    warning = ""
+  } = {}) {
+    return Swal.fire({
+      title: "\u6B4C\u5355\u7F16\u6392\u811A\u672C",
+      html: `
+      <div class="ncm-sort-script-editor">
+        <div class="ncm-sort-intro">
+          <p>${escapeHtml(playlistName)}</p>
+          <p class="ncm-sort-help">\u6309\u987A\u5E8F\u5199\u5165 song &lt;\u6B4C\u66F2ID&gt; \u6216 album &lt;\u4E13\u8F91ID&gt;\uFF0C\u4E13\u8F91\u4F1A\u6309\u66F2\u76EE\u987A\u5E8F\u5C55\u5F00\u3002</p>
+          <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${currentCount} \u9996\u6B4C\u66F2</p>
+          ${warning ? `<p class="ncm-sort-script-warning">${escapeHtml(warning)}</p>` : ""}
+        </div>
+        <div id="playlist-script-live-summary" class="ncm-sort-script-live-summary"></div>
+        <div class="ncm-sort-script-columns">
+          <div class="ncm-sort-script-preview-panel">
+            <div class="ncm-sort-script-panel-title">\u5B9E\u65F6\u9884\u89C8</div>
+            <div class="ncm-sort-script-scroll-wrap">
+              <div id="playlist-script-live-preview" class="ncm-sort-script-live-preview"></div>
+            </div>
+          </div>
+          <div class="ncm-sort-script-command-panel">
+            <div class="ncm-sort-script-panel-title">\u7F16\u6392\u547D\u4EE4</div>
+            <div class="ncm-sort-script-scroll-wrap">
+              <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
+              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
+            </div>
+            <div class="ncm-sort-script-toolbar">
+              <button id="playlist-script-reset" type="button" class="ncm-sort-script-tool-button">\u4ECE\u5F53\u524D\u6B4C\u5355\u91CD\u65B0\u751F\u6210</button>
+              <button id="playlist-script-copy" type="button" class="ncm-sort-script-tool-button">\u590D\u5236\u811A\u672C</button>
+            </div>
+          </div>
+        </div>
+        <p class="ncm-sort-script-help">\u811A\u672C\u662F\u5B8C\u6574\u6B4C\u5355\u58F0\u660E\u3002\u5E94\u7528\u540E\uFF0C\u5F53\u524D\u6B4C\u5355\u4E2D\u672A\u51FA\u73B0\u5728\u811A\u672C\u91CC\u7684\u6B4C\u66F2\u4F1A\u88AB\u79FB\u9664\u3002</p>
+      </div>
+    `,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u89E3\u6790\u9884\u89C8",
+      cancelButtonText: "\u53D6\u6D88",
+      focusConfirm: false,
+      customClass: {
+        ...swalClasses,
+        popup: "ncm-sort-popup ncm-sort-script-popup"
+      },
+      didOpen: () => {
+        const editor = document.getElementById("playlist-script-editor");
+        const preview = document.getElementById("playlist-script-live-preview");
+        const summary = document.getElementById("playlist-script-live-summary");
+        const activeLine = document.getElementById("playlist-script-active-line");
+        let updateTimer = 0;
+        let updateSequence = 0;
+        let isScrollSyncing = false;
+        const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
+        const getPreviewRows = () => [...preview.querySelectorAll("[data-source-line]")];
+        const getPreviewRowPosition = (row) => {
+          const previewRect = preview.getBoundingClientRect();
+          const rowRect = row.getBoundingClientRect();
+          return {
+            top: rowRect.top - previewRect.top + preview.scrollTop,
+            height: rowRect.height
+          };
+        };
+        const getEditorLineMetrics = () => {
+          const styles = getComputedStyle(editor);
+          const lineHeight = Number.parseFloat(styles.lineHeight) || 21.45;
+          const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
+          return { lineHeight, paddingTop };
+        };
+        const interpolateAnchors = (value, anchors, sourceKey, targetKey) => {
+          if (anchors.length === 1) return anchors[0][targetKey];
+          if (value <= anchors[0][sourceKey]) {
+            return anchors[0][targetKey];
+          }
+          const last = anchors.length - 1;
+          if (value >= anchors[last][sourceKey]) {
+            return anchors[last][targetKey];
+          }
+          for (let index = 0; index < last; index += 1) {
+            const start = anchors[index];
+            const end = anchors[index + 1];
+            if (value > end[sourceKey]) continue;
+            const distance = end[sourceKey] - start[sourceKey];
+            const fraction = distance > 0 ? (value - start[sourceKey]) / distance : 0;
+            return start[targetKey] + fraction * (end[targetKey] - start[targetKey]);
+          }
+          return anchors[last][targetKey];
+        };
+        const syncScroll = (source, target) => {
+          if (isScrollSyncing) return;
+          const rows = getPreviewRows();
+          if (!rows.length) return;
+          const { lineHeight, paddingTop } = getEditorLineMetrics();
+          const previewAnchors = rows.map((row) => {
+            const position = getPreviewRowPosition(row);
+            return {
+              position: position.top + position.height / 2,
+              line: paddingTop + (Number(row.dataset.sourceLine) - 0.5) * lineHeight
+            };
+          });
+          const editorAnchors = previewAnchors.map((anchor) => ({
+            position: anchor.line,
+            line: anchor.position
+          }));
+          const activeSourcePosition = source === preview ? source.scrollTop + source.clientHeight / 2 : source.scrollTop + source.clientHeight / 2;
+          const activeAnchors = source === preview ? previewAnchors : editorAnchors;
+          const activeIndex = activeAnchors.reduce((bestIndex, anchor, index) => {
+            const bestDistance = Math.abs(activeAnchors[bestIndex].position - activeSourcePosition);
+            const distance = Math.abs(anchor.position - activeSourcePosition);
+            return distance < bestDistance ? index : bestIndex;
+          }, 0);
+          rows.forEach((row, index) => row.classList.toggle("is-active", index === activeIndex));
+          const activeLineNumber = Number(rows[activeIndex].dataset.sourceLine);
+          activeLine.style.top = `${paddingTop + (activeLineNumber - 1) * lineHeight - editor.scrollTop}px`;
+          activeLine.dataset.line = String(activeLineNumber);
+          activeLine.dataset.order = rows[activeIndex].dataset.songOrder;
+          activeLine.style.display = "block";
+          let targetCenter;
+          if (source === preview) {
+            const sourceCenter = source.scrollTop + source.clientHeight / 2;
+            targetCenter = interpolateAnchors(sourceCenter, previewAnchors, "position", "line");
+          } else {
+            const sourceCenter = source.scrollTop + source.clientHeight / 2;
+            targetCenter = interpolateAnchors(sourceCenter, editorAnchors, "position", "line");
+          }
+          const targetScrollTop = targetCenter - target.clientHeight / 2;
+          isScrollSyncing = true;
+          target.scrollTop = clamp(targetScrollTop, 0, target.scrollHeight - target.clientHeight);
+          requestAnimationFrame(() => {
+            isScrollSyncing = false;
+          });
+        };
+        preview.addEventListener("scroll", () => syncScroll(preview, editor));
+        editor.addEventListener("scroll", () => syncScroll(editor, preview));
+        const renderPreview = ({ commands = [], expanded = null, error = "", loading = false } = {}) => {
+          if (loading) {
+            summary.innerHTML = '<span class="is-loading">\u6B63\u5728\u89E3\u6790\u811A\u672C\u548C\u4E13\u8F91\u2026\u2026</span>';
+            preview.innerHTML = "";
+            activeLine.style.display = "none";
+            return;
+          }
+          if (error) {
+            summary.innerHTML = `<span class="is-error">${escapeHtml(error)}</span>`;
+            preview.innerHTML = "";
+            activeLine.style.display = "none";
+            return;
+          }
+          if (!expanded) {
+            summary.innerHTML = "<span>\u8F93\u5165\u547D\u4EE4\u540E\u663E\u793A\u9884\u89C8\u3002</span>";
+            preview.innerHTML = "";
+            activeLine.style.display = "none";
+            return;
+          }
+          const currentIds = currentItems.map((item) => String(item.id));
+          const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
+          const currentMap = new Map(currentItems.map((item) => [String(item.id), item]));
+          const addedSet = new Set(diff.addedIds);
+          const commandBlocks = new Map(expanded.blocks.map((block) => [block.line, block]));
+          let targetSongOffset = 0;
+          const rows = commands.map((command) => {
+            const block = commandBlocks.get(command.line);
+            const songStart = targetSongOffset + 1;
+            const songEnd = targetSongOffset + block.songIds.length;
+            targetSongOffset = songEnd;
+            const isAlbum = command.type === "album";
+            const blockAddedCount = block.songIds.filter((id) => addedSet.has(String(id))).length;
+            const marker = blockAddedCount === block.songIds.length ? "+" : blockAddedCount ? "~" : "\xB7";
+            const firstItem = block.items?.[0] || { id: block.songIds[0] };
+            const title = isAlbum ? block.albumName || `\u4E13\u8F91 ${command.id}` : currentMap.get(String(command.id))?.title || firstItem.title || `\u6B4C\u66F2 ${command.id}`;
+            const meta = isAlbum ? `${block.albumArtist ? `${block.albumArtist} \xB7 ` : ""}${block.songIds.length} \u9996\u6B4C\u66F2` : [currentMap.get(String(command.id))?.artist, currentMap.get(String(command.id))?.album].filter(Boolean).join(" \xB7 ") || `ID ${command.id}`;
+            const trackRows = isAlbum ? block.songIds.map((id, index) => {
+              const item = currentMap.get(String(id)) || block.items?.[index] || { id };
+              const isTrackAdded = addedSet.has(String(id));
+              return `
+                <li class="ncm-sort-script-track-row ${isTrackAdded ? "is-added" : ""}">
+                  <span class="ncm-sort-script-track-marker">${isTrackAdded ? "+" : "\xB7"}</span>
+                  <span class="ncm-sort-script-preview-details">
+                    <span>${escapeHtml(item.title || `\u6B4C\u66F2 ${id}`)}</span>
+                    <small>${escapeHtml([item.artist, item.album].filter(Boolean).join(" \xB7 ") || `ID ${id}`)}</small>
+                  </span>
+                  <code>${escapeHtml(id)}</code>
+                </li>
+              `;
+            }).join("") : "";
+            return `
+            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group">
+              <div class="ncm-sort-script-preview-row ${blockAddedCount ? "is-added" : ""}">
+                <span class="ncm-sort-script-preview-marker">${marker}</span>
+                <span class="ncm-sort-script-preview-details">
+                  <span>${escapeHtml(title)}</span>
+                  <small>${escapeHtml(meta)}</small>
+                </span>
+                <code>${escapeHtml(command.id)}</code>
+              </div>
+              ${trackRows ? `<ol class="ncm-sort-script-track-list">${trackRows}</ol>` : ""}
+            </li>
+          `;
+          }).join("");
+          summary.innerHTML = `
+            <span>\u547D\u4EE4 <strong>${commands.length}</strong></span>
+            <span>\u76EE\u6807 <strong>${expanded.songIds.length}</strong></span>
+            <span class="is-added">\u65B0\u589E <strong>${diff.addedIds.length}</strong></span>
+            <span class="is-removed">\u79FB\u9664 <strong>${diff.removedIds.length}</strong></span>
+            <span>\u987A\u5E8F <strong>${diff.changedOrder ? "\u53D8\u5316" : "\u4E0D\u53D8"}</strong></span>
+        `;
+          preview.innerHTML = `<ol class="ncm-sort-script-preview-list">${rows}</ol>`;
+          requestAnimationFrame(() => syncScroll(preview, editor));
+        };
+        const updatePreview = async () => {
+          const sequence = ++updateSequence;
+          let commands;
+          try {
+            commands = parsePlaylistScript(editor.value);
+          } catch (error) {
+            renderPreview({ error: error.message });
+            return;
+          }
+          if (!resolveScript) {
+            renderPreview();
+            return;
+          }
+          renderPreview({ loading: true });
+          try {
+            const expanded = await resolveScript(commands);
+            if (sequence === updateSequence) renderPreview({ commands, expanded });
+          } catch (error) {
+            if (sequence === updateSequence) renderPreview({ error: error.message || String(error) });
+          }
+        };
+        editor.addEventListener("input", () => {
+          clearTimeout(updateTimer);
+          updateTimer = setTimeout(updatePreview, 280);
+        });
+        document.getElementById("playlist-script-reset").addEventListener("click", () => {
+          editor.value = currentScript;
+          editor.focus();
+          updatePreview();
+        });
+        document.getElementById("playlist-script-copy").addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(editor.value);
+            editor.focus();
+            showToast("\u811A\u672C\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
+          } catch (error) {
+            editor.focus();
+            editor.select();
+            showToast("\u65E0\u6CD5\u76F4\u63A5\u8BBF\u95EE\u526A\u8D34\u677F\uFF0C\u5DF2\u9009\u4E2D\u811A\u672C\u5185\u5BB9\uFF0C\u8BF7\u624B\u52A8\u590D\u5236");
+          }
+        });
+        updatePreview();
+      },
+      preConfirm: () => {
+        const value = document.getElementById("playlist-script-editor").value;
+        try {
+          parsePlaylistScript(value);
+        } catch (error) {
+          Swal.showValidationMessage(error.message);
+          return false;
+        }
+        return { scriptText: value };
+      }
+    });
+  }
+  function showPlaylistScriptPreviewDialog({
+    playlistName = "\u5F53\u524D\u6B4C\u5355",
+    commandCount,
+    targetCount,
+    addedCount,
+    removedCount,
+    changedOrder,
+    albumCount,
+    externalChange = false
+  }) {
+    const warning = externalChange ? '<p class="ncm-sort-script-warning">\u5F53\u524D\u6B4C\u5355\u5DF2\u504F\u79BB\u4E0A\u6B21\u5E94\u7528\u540E\u7684\u72B6\u6001\u3002\u786E\u8BA4\u540E\u5C06\u6309\u7167\u8FD9\u4EFD\u811A\u672C\u8986\u76D6\u5F53\u524D\u53D8\u5316\u3002</p>' : "";
+    return Swal.fire({
+      title: "\u9884\u89C8\u6B4C\u5355\u7F16\u6392",
+      html: `
+      <div class="ncm-sort-script-preview">
+        <div class="ncm-sort-intro">
+          <p>${escapeHtml(playlistName)}</p>
+          ${warning}
+        </div>
+        <div class="ncm-sort-script-summary">
+          <div><span>\u811A\u672C\u547D\u4EE4</span><strong>${commandCount}</strong></div>
+          <div><span>\u5C55\u5F00\u540E\u6B4C\u66F2</span><strong>${targetCount}</strong></div>
+          <div><span>\u65B0\u589E\u6B4C\u66F2</span><strong>${addedCount}</strong></div>
+          <div><span>\u79FB\u9664\u6B4C\u66F2</span><strong>${removedCount}</strong></div>
+          <div><span>\u4E13\u8F91\u547D\u4EE4</span><strong>${albumCount}</strong></div>
+          <div><span>\u987A\u5E8F\u53D8\u5316</span><strong>${changedOrder ? "\u6709" : "\u65E0"}</strong></div>
+        </div>
+        <p class="ncm-sort-script-help">\u786E\u8BA4\u540E\u4F1A\u4FDD\u5B58\u5F53\u524D\u987A\u5E8F\u5907\u4EFD\uFF0C\u5E76\u5C06\u6B4C\u5355\u5199\u56DE\u4E3A\u811A\u672C\u5C55\u5F00\u540E\u7684\u7ED3\u679C\u3002</p>
+      </div>
+    `,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u786E\u8BA4\u5199\u56DE",
+      cancelButtonText: "\u8FD4\u56DE\u7F16\u8F91",
+      focusConfirm: false,
+      customClass: externalChange ? dangerSwalClasses : swalClasses
+    });
+  }
   function showRestoreOrderDialog(backup) {
     const createdAt = backup.createdAt ? new Date(backup.createdAt).toLocaleString() : "\u672A\u77E5\u65F6\u95F4";
-    const operationText = backup.operation === "delete" ? `\u5C06\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u5DF2\u5220\u9664\u6B4C\u66F2\u5E76\u6062\u590D\u987A\u5E8F` : backup.operation === "move" ? "\u5C06\u6062\u590D\u79FB\u52A8\u524D\u7684\u6B4C\u66F2\u987A\u5E8F" : "\u5C06\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u66F2\u987A\u5E8F";
+    const operationText = backup.operation === "delete" ? `\u5C06\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u5DF2\u5220\u9664\u6B4C\u66F2\u5E76\u6062\u590D\u987A\u5E8F` : backup.operation === "script" ? `\u5C06\u79FB\u9664 ${backup.addedSongIds.length} \u9996\u65B0\u589E\u6B4C\u66F2\u3001\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u6B4C\u66F2\u5E76\u6062\u590D\u987A\u5E8F` : backup.operation === "move" ? "\u5C06\u6062\u590D\u79FB\u52A8\u524D\u7684\u6B4C\u66F2\u987A\u5E8F" : "\u5C06\u6062\u590D\u6392\u5E8F\u524D\u7684\u6B4C\u66F2\u987A\u5E8F";
     return Swal.fire({
       icon: "warning",
       title: "\u6062\u590D\u4E0A\u6B21\u64CD\u4F5C\u524D\u987A\u5E8F\uFF1F",
@@ -2079,7 +2939,7 @@ ${operationText}`,
 
   // src/settings/order-backup.js
   var ORDER_BACKUP_KEY = "ncm-playlist-sort:last-order-backup";
-  var ORDER_BACKUP_OPERATIONS = /* @__PURE__ */ new Set(["sort", "move", "delete"]);
+  var ORDER_BACKUP_OPERATIONS = /* @__PURE__ */ new Set(["sort", "move", "delete", "script"]);
   function normalizeBackup(backup) {
     if (!backup || typeof backup !== "object") return null;
     if (backup.pid === null || backup.pid === void 0) return null;
@@ -2087,12 +2947,15 @@ ${operationText}`,
     const operation = ORDER_BACKUP_OPERATIONS.has(backup.operation) ? backup.operation : "sort";
     const songIds = backup.songIds.map((id) => String(id));
     const songIdSet = new Set(songIds);
+    const removedSongIds = [...new Set((backup.removedSongIds || []).map((id) => String(id)))].filter((id) => songIdSet.has(id));
+    const addedSongIds = operation === "script" ? [...new Set((backup.addedSongIds || []).map((id) => String(id)))].filter((id) => !songIdSet.has(id)) : [];
     return {
       pid: String(backup.pid),
       playlistName: typeof backup.playlistName === "string" ? backup.playlistName : "",
       operation,
       songIds,
-      removedSongIds: operation === "delete" ? [...new Set((backup.removedSongIds || []).map((id) => String(id)))].filter((id) => songIdSet.has(id)) : [],
+      removedSongIds: operation === "delete" || operation === "script" ? removedSongIds : [],
+      addedSongIds,
       createdAt: Number.isFinite(backup.createdAt) ? backup.createdAt : 0
     };
   }
@@ -2105,13 +2968,14 @@ ${operationText}`,
       return null;
     }
   }
-  async function saveOrderBackup(pid, songIds, playlistName = "", { operation = "sort", removedSongIds = [] } = {}) {
+  async function saveOrderBackup(pid, songIds, playlistName = "", { operation = "sort", removedSongIds = [], addedSongIds = [] } = {}) {
     const backup = normalizeBackup({
       pid,
       playlistName,
       operation,
       songIds,
       removedSongIds,
+      addedSongIds,
       createdAt: Date.now()
     });
     if (!backup) return false;
@@ -2615,6 +3479,13 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     return true;
   }
   function getExpectedCurrentIds(backup) {
+    if (backup.operation === "script") {
+      const removedIds2 = new Set(backup.removedSongIds);
+      return [
+        ...backup.songIds.filter((id) => !removedIds2.has(id)),
+        ...backup.addedSongIds
+      ];
+    }
     if (backup.operation !== "delete") return backup.songIds;
     const removedIds = new Set(backup.removedSongIds);
     return backup.songIds.filter((id) => !removedIds.has(id));
@@ -2648,7 +3519,20 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         });
         return;
       }
-      if (backup.operation === "delete") {
+      if (backup.operation === "script" && backup.addedSongIds.length) {
+        showToast(`\u6B63\u5728\u79FB\u9664 ${backup.addedSongIds.length} \u9996\u65B0\u589E\u6B4C\u66F2...`);
+        const deleteResult = await deleteSongsFromPlaylist(pid, backup.addedSongIds);
+        if (!deleteResult || deleteResult.code !== 200) {
+          Swal.fire({
+            icon: "error",
+            title: "\u79FB\u9664\u65B0\u589E\u6B4C\u66F2\u5931\u8D25",
+            text: JSON.stringify(deleteResult),
+            customClass: swalClasses
+          });
+          return;
+        }
+      }
+      if ((backup.operation === "delete" || backup.operation === "script") && backup.removedSongIds.length) {
         showToast(`\u6B63\u5728\u91CD\u65B0\u52A0\u5165 ${backup.removedSongIds.length} \u9996\u6B4C\u66F2...`);
         const addResult = await addSongsToPlaylist(pid, backup.removedSongIds);
         if (!addResult || addResult.code !== 200) {
@@ -2692,6 +3576,205 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
   }
 
+  // src/settings/playlist-script.js
+  var PLAYLIST_SCRIPT_SETTINGS_PREFIX = "ncm-playlist-sort:playlist-script:";
+  function getKey(pid) {
+    return `${PLAYLIST_SCRIPT_SETTINGS_PREFIX}${String(pid)}`;
+  }
+  function normalizeIds(ids) {
+    return Array.isArray(ids) ? ids.map((id) => String(id)) : [];
+  }
+  function normalizeSavedScript(pid, value) {
+    if (!value || typeof value !== "object" || typeof value.scriptText !== "string") return null;
+    const scriptText = value.scriptText.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    const appliedScriptText = typeof value.appliedScriptText === "string" ? value.appliedScriptText.replaceAll("\r\n", "\n").replaceAll("\r", "\n") : scriptText;
+    return {
+      pid: String(pid),
+      scriptText,
+      appliedScriptText,
+      appliedSongIds: normalizeIds(value.appliedSongIds),
+      updatedAt: Number.isFinite(value.updatedAt) ? value.updatedAt : 0
+    };
+  }
+  async function loadPlaylistScript(pid) {
+    try {
+      const value = await Promise.resolve(readStoredValue(getKey(pid)));
+      return normalizeSavedScript(pid, value);
+    } catch (error) {
+      console.warn("[NCM-SORT] \u8BFB\u53D6\u6B4C\u5355\u7F16\u6392\u811A\u672C\u5931\u8D25", error);
+      return null;
+    }
+  }
+  async function savePlaylistScript(pid, {
+    scriptText,
+    appliedSongIds,
+    appliedScriptText = scriptText
+  }) {
+    const value = normalizeSavedScript(pid, {
+      scriptText,
+      appliedSongIds,
+      appliedScriptText,
+      updatedAt: Date.now()
+    });
+    if (!value) return false;
+    try {
+      return await Promise.resolve(writeStoredValue(getKey(pid), value));
+    } catch (error) {
+      console.warn("[NCM-SORT] \u4FDD\u5B58\u6B4C\u5355\u7F16\u6392\u811A\u672C\u5931\u8D25", error);
+      return false;
+    }
+  }
+
+  // src/operations/playlist-script.js
+  function normalizeIds2(ids) {
+    return ids.map((id) => String(id));
+  }
+  function showOperationError(title, error) {
+    return Swal.fire({
+      icon: "error",
+      title,
+      text: error?.message || String(error),
+      customClass: swalClasses
+    });
+  }
+  function getDriftWarning(state) {
+    if (!state.currentChanged) return "";
+    if (state.conflicted) {
+      return "\u5F53\u524D\u6B4C\u5355\u548C\u672C\u5730\u811A\u672C\u90FD\u5DF2\u53D1\u751F\u53D8\u5316\u3002\u7EE7\u7EED\u5E94\u7528\u4F1A\u4EE5\u672C\u5730\u811A\u672C\u8986\u76D6\u5F53\u524D\u6B4C\u5355\u53D8\u5316\u3002";
+    }
+    return "\u5F53\u524D\u6B4C\u5355\u5DF2\u504F\u79BB\u4E0A\u6B21\u5E94\u7528\u540E\u7684\u72B6\u6001\u3002\u7EE7\u7EED\u5E94\u7528\u4F1A\u4EE5\u672C\u5730\u811A\u672C\u8986\u76D6\u5F53\u524D\u6B4C\u5355\u53D8\u5316\u3002";
+  }
+  async function editPlaylistScript(pid) {
+    showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
+    const saved = await loadPlaylistScript(pid);
+    const currentIds = normalizeIds2(originalSongIds);
+    const initialScript = saved?.scriptText || buildPlaylistScript(currentIds);
+    const state = getPlaylistScriptState(currentIds, saved);
+    const albumResponses = /* @__PURE__ */ new Map();
+    const resolveScript = (commands2) => expandPlaylistScript(commands2, {
+      fetchAlbum: async (albumId) => {
+        if (!albumResponses.has(albumId)) {
+          albumResponses.set(albumId, await fetchAlbumDetail(albumId));
+        }
+        return albumResponses.get(albumId);
+      }
+    });
+    const editorResult = await showPlaylistScriptDialog(initialScript, {
+      playlistName: playlist.name,
+      currentCount: currentIds.length,
+      currentScript: buildPlaylistScript(currentIds),
+      currentItems: items,
+      resolveScript,
+      warning: getDriftWarning(state)
+    });
+    if (!editorResult.isConfirmed) return;
+    const scriptText = editorResult.value.scriptText.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+    const commands = parsePlaylistScript(scriptText);
+    await savePlaylistScript(pid, {
+      scriptText,
+      appliedSongIds: saved?.appliedSongIds?.length ? saved.appliedSongIds : currentIds,
+      appliedScriptText: saved?.appliedScriptText || initialScript
+    });
+    let expanded;
+    try {
+      showToast("\u6B63\u5728\u5C55\u5F00\u6B4C\u5355\u7F16\u6392\u811A\u672C...");
+      expanded = await resolveScript(commands);
+    } catch (error) {
+      await showOperationError("\u811A\u672C\u5C55\u5F00\u5931\u8D25", error);
+      return;
+    }
+    const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
+    const previewResult = await showPlaylistScriptPreviewDialog({
+      playlistName: playlist.name,
+      commandCount: commands.length,
+      targetCount: expanded.songIds.length,
+      addedCount: diff.addedIds.length,
+      removedCount: diff.removedIds.length,
+      changedOrder: diff.changedOrder,
+      albumCount: commands.filter((command) => command.type === "album").length,
+      externalChange: state.currentChanged && !sameSongOrder(currentIds, expanded.songIds)
+    });
+    if (!previewResult.isConfirmed) return;
+    if (!diff.addedIds.length && !diff.removedIds.length && !diff.changedOrder) {
+      await savePlaylistScript(pid, {
+        scriptText,
+        appliedSongIds: expanded.songIds,
+        appliedScriptText: scriptText
+      });
+      await Swal.fire({
+        icon: "info",
+        title: "\u6B4C\u5355\u6CA1\u6709\u53D8\u5316",
+        text: "\u811A\u672C\u5DF2\u4FDD\u5B58\uFF0C\u672A\u5199\u56DE\u7F51\u6613\u4E91\u6B4C\u5355\u3002",
+        customClass: swalClasses
+      });
+      return;
+    }
+    let latestDetail;
+    try {
+      latestDetail = await fetchPlaylistDetail(pid);
+    } catch (error) {
+      await showOperationError("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D\u6B4C\u5355\u72B6\u6001", error);
+      return;
+    }
+    if (!latestDetail || latestDetail.code !== 200) {
+      await showOperationError("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D\u6B4C\u5355\u72B6\u6001", new Error(JSON.stringify(latestDetail)));
+      return;
+    }
+    const latestIds = normalizeIds2(getPlaylistTrackIds(latestDetail.playlist));
+    if (!sameSongOrder(currentIds, latestIds)) {
+      await Swal.fire({
+        icon: "warning",
+        title: "\u6B4C\u5355\u5728\u7F16\u8F91\u671F\u95F4\u53D1\u751F\u53D8\u5316",
+        text: "\u672C\u6B21\u5199\u56DE\u5DF2\u53D6\u6D88\uFF0C\u521A\u624D\u7F16\u8F91\u7684\u811A\u672C\u5DF2\u4FDD\u7559\u3002\u8BF7\u91CD\u65B0\u6253\u5F00\u5DE5\u5177\u5E76\u786E\u8BA4\u6700\u65B0\u5DEE\u5F02\u3002",
+        customClass: swalClasses
+      });
+      return;
+    }
+    const backupSaved = await saveOrderBackup(pid, currentIds, playlist.name, {
+      operation: "script",
+      removedSongIds: diff.removedIds,
+      addedSongIds: diff.addedIds
+    });
+    try {
+      if (diff.addedIds.length) {
+        showToast(`\u6B63\u5728\u52A0\u5165 ${diff.addedIds.length} \u9996\u6B4C\u66F2...`);
+        const addResult = await addSongsToPlaylist(pid, diff.addedIds);
+        if (!addResult || addResult.code !== 200) {
+          throw new Error(`\u52A0\u5165\u6B4C\u66F2\u5931\u8D25\uFF1A${JSON.stringify(addResult)}`);
+        }
+      }
+      if (diff.removedIds.length) {
+        showToast(`\u6B63\u5728\u79FB\u9664 ${diff.removedIds.length} \u9996\u6B4C\u66F2...`);
+        const deleteResult = await deleteSongsFromPlaylist(pid, diff.removedIds);
+        if (!deleteResult || deleteResult.code !== 200) {
+          throw new Error(`\u79FB\u9664\u6B4C\u66F2\u5931\u8D25\uFF1A${JSON.stringify(deleteResult)}`);
+        }
+      }
+      showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+      const updateResult = await updatePlaylistOrder(pid, expanded.songIds);
+      if (!updateResult || updateResult.code !== 200) {
+        throw new Error(`\u5199\u56DE\u6B4C\u5355\u987A\u5E8F\u5931\u8D25\uFF1A${JSON.stringify(updateResult)}`);
+      }
+    } catch (error) {
+      await showOperationError("\u6B4C\u5355\u7F16\u6392\u5931\u8D25", error);
+      return;
+    }
+    const scriptSaved = await savePlaylistScript(pid, {
+      scriptText,
+      appliedSongIds: expanded.songIds,
+      appliedScriptText: scriptText
+    });
+    await Swal.fire({
+      icon: "success",
+      title: "\u6B4C\u5355\u7F16\u6392\u5B8C\u6210",
+      text: `${playlist.name}
+\u5171 ${expanded.songIds.length} \u9996\u6B4C\u66F2
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u5199\u56DE\u524D\u987A\u5E8F\n" : ""}${scriptSaved ? "\u811A\u672C\u5DF2\u4FDD\u5B58\u5230\u5F53\u524D\u6B4C\u5355\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+      customClass: swalClasses
+    });
+  }
+
   // src/ui/menu.js
   async function showFunctionMenu(pid) {
     const backup = await loadOrderBackup();
@@ -2700,6 +3783,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       title: "\u6B4C\u5355\u6392\u5E8F\u5DE5\u5177",
       html: `
       <div class="ncm-sort-menu">
+        <button id="playlist-script" class="ncm-sort-menu-button">\u6B4C\u5355\u7F16\u6392\u811A\u672C</button>
         <button id="sort-by-title" class="ncm-sort-menu-button">\u6309\u6807\u9898\u6392\u5E8F</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
@@ -2714,6 +3798,20 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       showCloseButton: true,
       customClass: swalClasses,
       didOpen: () => {
+        document.getElementById("playlist-script").addEventListener("click", async () => {
+          Swal.close();
+          try {
+            await editPlaylistScript(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
         document.getElementById("sort-by-title").addEventListener("click", async () => {
           Swal.close();
           try {

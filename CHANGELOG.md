@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-09-04
+
+### Added
+
+- Added v1 playlist orchestration scripts using `song <id>` and `album <id>` commands.
+- Added per-playlist script storage, canonical song-only export, album expansion, preview, and external-change detection.
+- Added a two-column live preview with full album expansion, change summary, synchronized scrolling, and active order markers.
+
+### Changed
+
+- Put “歌单编排脚本” first in the playlist tools menu.
+- Canonical script output now starts directly with `song` or `album` commands; legacy `# ncm-playlist: 1` headers remain readable.
+- Added recovery support for script operations that add and remove songs in one run.
+
+### Fixed
+
+- Fixed album responses with an empty nested `album.songs` array masking a non-empty top-level `songs` array.
+
 ## [0.8.0] - 2026-09-04
 
 ### Added

@@ -1,5 +1,5 @@
 import { showToast } from '../utils/dom.js';
-import { addSongsToPlaylist, fetchPlaylistDetail, updatePlaylistOrder } from '../ncm/api.js';
+import { addSongsToPlaylist, deleteSongsFromPlaylist, fetchPlaylistDetail, updatePlaylistOrder } from '../ncm/api.js';
 import { getPlaylistTrackIds } from '../data/playlist.js';
 import { clearOrderBackup, loadOrderBackup } from '../settings/order-backup.js';
 import { showRestoreOrderDialog } from '../ui/dialogs.js';
@@ -29,6 +29,13 @@ function sameSongSet(currentIds, backupIds) {
 }
 
 function getExpectedCurrentIds(backup) {
+  if (backup.operation === 'script') {
+    const removedIds = new Set(backup.removedSongIds);
+    return [
+      ...backup.songIds.filter(id => !removedIds.has(id)),
+      ...backup.addedSongIds
+    ];
+  }
   if (backup.operation !== 'delete') return backup.songIds;
 
   const removedIds = new Set(backup.removedSongIds);
@@ -68,7 +75,21 @@ export async function restoreLastOrder(pid) {
       return;
     }
 
-    if (backup.operation === 'delete') {
+    if (backup.operation === 'script' && backup.addedSongIds.length) {
+      showToast(`正在移除 ${backup.addedSongIds.length} 首新增歌曲...`);
+      const deleteResult = await deleteSongsFromPlaylist(pid, backup.addedSongIds);
+      if (!deleteResult || deleteResult.code !== 200) {
+        Swal.fire({
+          icon: 'error',
+          title: '移除新增歌曲失败',
+          text: JSON.stringify(deleteResult),
+          customClass: swalClasses
+        });
+        return;
+      }
+    }
+
+    if ((backup.operation === 'delete' || backup.operation === 'script') && backup.removedSongIds.length) {
       showToast(`正在重新加入 ${backup.removedSongIds.length} 首歌曲...`);
       const addResult = await addSongsToPlaylist(pid, backup.removedSongIds);
       if (!addResult || addResult.code !== 200) {

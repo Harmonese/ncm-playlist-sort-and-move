@@ -1,7 +1,7 @@
 import { readStoredValue, writeStoredValue } from './storage.js';
 
 export const ORDER_BACKUP_KEY = 'ncm-playlist-sort:last-order-backup';
-const ORDER_BACKUP_OPERATIONS = new Set(['sort', 'move', 'delete']);
+const ORDER_BACKUP_OPERATIONS = new Set(['sort', 'move', 'delete', 'script']);
 
 function normalizeBackup(backup) {
   if (!backup || typeof backup !== 'object') return null;
@@ -13,15 +13,19 @@ function normalizeBackup(backup) {
     : 'sort';
   const songIds = backup.songIds.map(id => String(id));
   const songIdSet = new Set(songIds);
+  const removedSongIds = [...new Set((backup.removedSongIds || []).map(id => String(id)))]
+    .filter(id => songIdSet.has(id));
+  const addedSongIds = operation === 'script'
+    ? [...new Set((backup.addedSongIds || []).map(id => String(id)))].filter(id => !songIdSet.has(id))
+    : [];
 
   return {
     pid: String(backup.pid),
     playlistName: typeof backup.playlistName === 'string' ? backup.playlistName : '',
     operation,
     songIds,
-    removedSongIds: operation === 'delete'
-      ? [...new Set((backup.removedSongIds || []).map(id => String(id)))].filter(id => songIdSet.has(id))
-      : [],
+    removedSongIds: operation === 'delete' || operation === 'script' ? removedSongIds : [],
+    addedSongIds,
     createdAt: Number.isFinite(backup.createdAt) ? backup.createdAt : 0
   };
 }
@@ -40,7 +44,7 @@ export async function saveOrderBackup(
   pid,
   songIds,
   playlistName = '',
-  { operation = 'sort', removedSongIds = [] } = {}
+  { operation = 'sort', removedSongIds = [], addedSongIds = [] } = {}
 ) {
   const backup = normalizeBackup({
     pid,
@@ -48,6 +52,7 @@ export async function saveOrderBackup(
     operation,
     songIds,
     removedSongIds,
+    addedSongIds,
     createdAt: Date.now()
   });
 

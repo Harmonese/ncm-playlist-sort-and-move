@@ -31,6 +31,11 @@ const {
   loadOrderBackup,
   saveOrderBackup
 } = await import('../src/settings/order-backup.js');
+const {
+  clearPlaylistScript,
+  loadPlaylistScript,
+  savePlaylistScript
+} = await import('../src/settings/playlist-script.js');
 
 test('title sort settings use defaults when nothing is saved', async () => {
   storedValues.clear();
@@ -148,13 +153,15 @@ test('order backup preserves the playlist identity and can be cleared', async ()
     playlistName: '测试歌单',
     operation: 'sort',
     songIds: ['3', '1', '2'],
-    removedSongIds: []
+    removedSongIds: [],
+    addedSongIds: []
   }, {
     pid: backup.pid,
     playlistName: backup.playlistName,
     operation: backup.operation,
     songIds: backup.songIds,
-    removedSongIds: backup.removedSongIds
+    removedSongIds: backup.removedSongIds,
+    addedSongIds: backup.addedSongIds
   });
   assert.equal(typeof backup.createdAt, 'number');
 
@@ -164,6 +171,34 @@ test('order backup preserves the playlist identity and can be cleared', async ()
   });
   assert.deepEqual((await loadOrderBackup()).removedSongIds, ['1']);
 
+  await saveOrderBackup('123', [3, 1, 2], '测试歌单', {
+    operation: 'script',
+    removedSongIds: [1],
+    addedSongIds: [4]
+  });
+  assert.deepEqual((await loadOrderBackup()).addedSongIds, ['4']);
+
   assert.equal(await clearOrderBackup(), true);
   assert.equal(await loadOrderBackup(), null);
+});
+
+test('playlist scripts are stored independently for each playlist', async () => {
+  storedValues.clear();
+
+  assert.equal(await savePlaylistScript('123', {
+    scriptText: 'song 1\r\nsong 2',
+    appliedSongIds: [1, 2],
+    appliedScriptText: 'song 1\nsong 2'
+  }), true);
+
+  assert.deepEqual(await loadPlaylistScript('123'), {
+    pid: '123',
+    scriptText: 'song 1\nsong 2',
+    appliedScriptText: 'song 1\nsong 2',
+    appliedSongIds: ['1', '2'],
+    updatedAt: (await loadPlaylistScript('123')).updatedAt
+  });
+  assert.equal(await loadPlaylistScript('456'), null);
+  assert.equal(await clearPlaylistScript('123'), true);
+  assert.equal(await loadPlaylistScript('123'), null);
 });
