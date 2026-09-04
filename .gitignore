@@ -13,6 +13,8 @@ node_modules/
 dist/
 build/
 coverage/
+.playwright-cli/
+output/
 
 # Editor and local environment
 .idea/

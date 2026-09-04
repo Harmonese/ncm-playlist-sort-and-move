@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-09-04
+
+### Added
+
+- Added manual playlist sorting with pointer-based drag-and-drop and keyboard arrow-key movement.
+- Added song details, scroll support, drag placeholders, cancellation, and Escape-key handling to the manual sorting dialog.
+- Added stable-sort regression coverage for original playlist order and missing ordering metadata.
+
+### Changed
+
+- Unified drag interactions for title-category, artist-category, and song-order lists.
+- Unified stable ordering across title, date, artist, heat, and playlist data workflows.
+- Optimized title comparison setup by reusing category-rank data for each comparator.
+- Added recovery backups for manual sorting and documented manual sorting in the README.
+
+### Fixed
+
+- Fixed pointer dragging being interrupted when the dragged source was removed from the rendered layout.
+- Fixed deterministic tie-breaking when multiple items share the same original index.
+
 ## [0.7.0] - 2026-08-31
 
 ### Added

@@ -1,6 +1,6 @@
 import { createTextComparator } from './title.js';
 import { cmpByDate } from './date.js';
-import { getOriginalIndex } from './order.js';
+import { getOriginalIndex, stableSort } from './order.js';
 
 export const DEFAULT_ARTIST_SORT_CONFIG = Object.freeze({
   sortArtistsByName: true,
@@ -41,13 +41,17 @@ export function sortSongsByArtist(items, config, textSortConfig, dateSortConfig)
     group.items.push({ item, index: originalIndex });
   });
 
-  if (normalizedConfig.sortArtistsByName) {
-    groups.sort((a, b) => compareArtist(a.artist, b.artist) || a.index - b.index);
-  }
+  const orderedGroups = normalizedConfig.sortArtistsByName
+    ? stableSort(groups, (a, b) => compareArtist(a.artist, b.artist), group => group.index)
+    : groups;
 
-  return groups.flatMap(group => {
+  return orderedGroups.flatMap(group => {
     if (normalizedConfig.sortSameArtistByDate) {
-      group.items.sort((a, b) => compareDate(a.item, b.item) || a.index - b.index);
+      group.items = stableSort(
+        group.items,
+        (a, b) => compareDate(a.item, b.item),
+        item => item.index
+      );
     }
     return group.items.map(({ item }) => item);
   });

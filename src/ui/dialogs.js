@@ -37,6 +37,27 @@ function orderTitleCategories(categories, savedOrder) {
   return ordered;
 }
 
+function escapeHtml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;');
+}
+
+function createDragHandle() {
+  return `
+    <span
+      class="ncm-sort-drag-handle"
+      role="button"
+      tabindex="0"
+      title="拖动调整顺序"
+      aria-label="拖动调整顺序"
+    >⋮⋮</span>
+  `;
+}
+
 function createTitleCategoryList(categories) {
   return categories.map((category, index) => `
     <li class="ncm-sort-priority-item" data-category="${category.id}">
@@ -45,8 +66,24 @@ function createTitleCategoryList(categories) {
         ${category.label}
       </span>
       <span class="ncm-sort-priority-actions">
-        <button type="button" class="ncm-sort-icon-button" data-move="up" title="上移" aria-label="上移">↑</button>
-        <button type="button" class="ncm-sort-icon-button" data-move="down" title="下移" aria-label="下移">↓</button>
+        ${createDragHandle()}
+      </span>
+    </li>
+  `).join('');
+}
+
+function createManualSongList(items) {
+  return items.map((item, index) => `
+    <li class="ncm-sort-priority-item ncm-sort-song-item" data-song-id="${escapeHtml(item.id)}">
+      <span class="ncm-sort-priority-name ncm-sort-song-name">
+        <span class="ncm-sort-priority-index">${index + 1}</span>
+        <span class="ncm-sort-song-details">
+          <span class="ncm-sort-song-title">${escapeHtml(item.title || '未命名歌曲')}</span>
+          <span class="ncm-sort-song-meta">${escapeHtml(item.artist || '未知歌手')}${item.album ? ` · ${escapeHtml(item.album)}` : ''}</span>
+        </span>
+      </span>
+      <span class="ncm-sort-priority-actions">
+        ${createDragHandle()}
       </span>
     </li>
   `).join('');
@@ -77,10 +114,224 @@ function refreshPriorityIndexes(list) {
   });
 }
 
+function movePriorityItem(list, item, direction) {
+  const sibling = direction === 'up'
+    ? item.previousElementSibling
+    : item.nextElementSibling;
+
+  if (!sibling) return;
+
+  if (direction === 'up') {
+    list.insertBefore(item, sibling);
+  } else {
+    list.insertBefore(sibling, item);
+  }
+  refreshPriorityIndexes(list);
+  item.querySelector('.ncm-sort-drag-handle').focus();
+}
+
+function bindSortableList(list) {
+  const dragThreshold = 5;
+  let pendingDrag = null;
+  let draggedItem = null;
+  let dropPlaceholder = null;
+  let dragFrame = 0;
+  let latestDragPosition = null;
+  let originalNextSibling = null;
+
+  const cancelDragFrame = () => {
+    if (!dragFrame) return;
+    cancelAnimationFrame(dragFrame);
+    dragFrame = 0;
+  };
+
+  const scheduleDragFrame = () => {
+    if (!dragFrame) {
+      dragFrame = requestAnimationFrame(updateDropPlaceholder);
+    }
+  };
+
+  const updateDropPlaceholder = () => {
+    dragFrame = 0;
+    if (!draggedItem || !dropPlaceholder || !latestDragPosition) return;
+
+    const { clientX, clientY } = latestDragPosition;
+    const scrollContainer = list.closest('.ncm-sort-scroll-container');
+    let didScroll = false;
+    if (scrollContainer) {
+      const rect = scrollContainer.getBoundingClientRect();
+      const edgeSize = 44;
+      const previousScrollTop = scrollContainer.scrollTop;
+      if (clientY < rect.top + edgeSize) {
+        scrollContainer.scrollTop -= 14;
+      } else if (clientY > rect.bottom - edgeSize) {
+        scrollContainer.scrollTop += 14;
+      }
+      didScroll = scrollContainer.scrollTop !== previousScrollTop;
+    }
+
+    const target = document.elementFromPoint(clientX, clientY)
+      ?.closest('.ncm-sort-priority-item');
+    if (target?.parentElement === list) {
+      const rect = target.getBoundingClientRect();
+      const insertBefore = clientY < rect.top + rect.height / 2;
+      if (insertBefore) {
+        if (dropPlaceholder.nextElementSibling !== target) {
+          list.insertBefore(dropPlaceholder, target);
+        }
+      } else if (target.nextElementSibling !== dropPlaceholder) {
+        list.insertBefore(dropPlaceholder, target.nextSibling);
+      }
+    } else {
+      const listRect = list.getBoundingClientRect();
+      if (clientY <= listRect.top) {
+        list.prepend(dropPlaceholder);
+      } else if (clientY >= listRect.bottom) {
+        list.append(dropPlaceholder);
+      }
+    }
+
+    if (didScroll) {
+      scheduleDragFrame();
+    }
+  };
+
+  const startDrag = (item) => {
+    draggedItem = item;
+    originalNextSibling = item.nextElementSibling;
+    dropPlaceholder = document.createElement('li');
+    dropPlaceholder.className = 'ncm-sort-drag-placeholder';
+    dropPlaceholder.setAttribute('aria-hidden', 'true');
+    dropPlaceholder.style.height = `${item.getBoundingClientRect().height}px`;
+    list.insertBefore(dropPlaceholder, item);
+    item.classList.add('is-dragging', 'is-drag-source-hidden');
+    document.body.classList.add('ncm-sort-is-pointer-dragging');
+  };
+
+  const removePointerListeners = () => {
+    window.removeEventListener('pointermove', handlePointerMove, true);
+    window.removeEventListener('pointerup', handlePointerUp, true);
+    window.removeEventListener('pointercancel', handlePointerCancel, true);
+    window.removeEventListener('blur', handlePointerCancel);
+    window.removeEventListener('keydown', handleDragKeydown, true);
+  };
+
+  const finishDrag = (commit) => {
+    if (commit && dragFrame) {
+      cancelDragFrame();
+      updateDropPlaceholder();
+    }
+    cancelDragFrame();
+    latestDragPosition = null;
+
+    if (draggedItem && dropPlaceholder?.parentElement === list) {
+      if (commit) {
+        list.insertBefore(draggedItem, dropPlaceholder);
+      } else if (originalNextSibling?.parentElement === list) {
+        list.insertBefore(draggedItem, originalNextSibling);
+      } else {
+        list.append(draggedItem);
+      }
+      dropPlaceholder.remove();
+      draggedItem.classList.remove('is-dragging', 'is-drag-source-hidden');
+      refreshPriorityIndexes(list);
+    }
+
+    document.body.classList.remove('ncm-sort-is-pointer-dragging');
+    pendingDrag = null;
+    draggedItem = null;
+    dropPlaceholder = null;
+    originalNextSibling = null;
+    removePointerListeners();
+  };
+
+  function handlePointerMove(event) {
+    if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) return;
+
+    if (!draggedItem) {
+      const distance = Math.hypot(
+        event.clientX - pendingDrag.startX,
+        event.clientY - pendingDrag.startY
+      );
+      if (distance < dragThreshold) return;
+      startDrag(pendingDrag.item);
+    }
+
+    event.preventDefault();
+    latestDragPosition = {
+      clientX: event.clientX,
+      clientY: event.clientY
+    };
+    scheduleDragFrame();
+  }
+
+  function handlePointerUp(event) {
+    if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) return;
+    finishDrag(Boolean(draggedItem));
+  }
+
+  function handlePointerCancel(event) {
+    if (event?.pointerId != null && pendingDrag && event.pointerId !== pendingDrag.pointerId) return;
+    finishDrag(false);
+  }
+
+  function handleDragKeydown(event) {
+    if (event.key !== 'Escape') return;
+    event.preventDefault();
+    finishDrag(false);
+  }
+
+  list.addEventListener('pointerdown', (event) => {
+    if (!event.isPrimary || event.button !== 0) return;
+    if (list.closest('fieldset')?.disabled) return;
+
+    const item = event.target.closest('.ncm-sort-priority-item');
+    if (!item || item.parentElement !== list) return;
+    if (event.pointerType !== 'mouse' && !event.target.closest('.ncm-sort-drag-handle')) return;
+
+    event.preventDefault();
+    event.target.closest('.ncm-sort-drag-handle')?.focus({ preventScroll: true });
+    pendingDrag = {
+      item,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY
+    };
+    window.addEventListener('pointermove', handlePointerMove, { capture: true, passive: false });
+    window.addEventListener('pointerup', handlePointerUp, true);
+    window.addEventListener('pointercancel', handlePointerCancel, true);
+    window.addEventListener('blur', handlePointerCancel);
+    window.addEventListener('keydown', handleDragKeydown, true);
+  });
+
+  list.addEventListener('keydown', (event) => {
+    const handle = event.target.closest('.ncm-sort-drag-handle');
+    if (!handle) return;
+    if (list.closest('fieldset')?.disabled) return;
+
+    const item = handle.closest('.ncm-sort-priority-item');
+    if (event.key === 'ArrowUp') {
+      event.preventDefault();
+      movePriorityItem(list, item, 'up');
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault();
+      movePriorityItem(list, item, 'down');
+    }
+  });
+}
+
+function readManualSongOrder() {
+  return [...document.querySelectorAll('#manual-song-list [data-song-id]')]
+    .map(item => item.dataset.songId);
+}
+
 function setPriorityDisabled(disabled, prefix = 'title') {
   const fieldset = document.getElementById(`${prefix}-category-priority`);
   fieldset.disabled = disabled;
   fieldset.classList.toggle('is-disabled', disabled);
+  fieldset.querySelectorAll('.ncm-sort-priority-item').forEach((item) => {
+    item.querySelector('.ncm-sort-drag-handle')?.setAttribute('aria-disabled', String(disabled));
+  });
 }
 
 function readDateSortConfig(prefix = 'date') {
@@ -175,28 +426,43 @@ export async function showTitleSortDialog(categoryIds) {
         setPriorityDisabled(directCompare.checked);
       });
 
-      list.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-move]');
-        if (!button) return;
-
-        const item = button.closest('.ncm-sort-priority-item');
-        const sibling = button.dataset.move === 'up'
-          ? item.previousElementSibling
-          : item.nextElementSibling;
-
-        if (!sibling) return;
-
-        if (button.dataset.move === 'up') {
-          list.insertBefore(item, sibling);
-        } else {
-          list.insertBefore(sibling, item);
-        }
-        refreshPriorityIndexes(list);
-      });
+      bindSortableList(list);
 
       setPriorityDisabled(directCompare.checked);
     },
     preConfirm: () => readTitleSortConfig(savedConfig)
+  });
+}
+
+export function showManualSortDialog(items) {
+  return Swal.fire({
+    title: '手动排序',
+    html: `
+      <div class="ncm-sort-intro">
+        <p>拖动歌曲调整歌单顺序</p>
+        <p class="ncm-sort-detected">共 ${items.length} 首歌曲</p>
+      </div>
+      <div class="ncm-sort-scroll-container">
+        <ol id="manual-song-list" class="ncm-sort-priority-list ncm-sort-song-list">
+          ${createManualSongList(items)}
+        </ol>
+      </div>
+    `,
+    showConfirmButton: true,
+    showCancelButton: true,
+    confirmButtonText: '保存排序',
+    cancelButtonText: '取消',
+    focusConfirm: false,
+    customClass: {
+      ...swalClasses,
+      popup: 'ncm-sort-popup ncm-sort-manual-popup'
+    },
+    didOpen: () => {
+      bindSortableList(document.getElementById('manual-song-list'));
+    },
+    preConfirm: () => ({
+      orderedSongIds: readManualSongOrder()
+    })
   });
 }
 
@@ -368,23 +634,7 @@ export async function showArtistSortDialog(categoryIds, savedSettings) {
         setPriorityDisabled(directCompare.checked, 'artist');
       });
 
-      list.addEventListener('click', (event) => {
-        const button = event.target.closest('[data-move]');
-        if (!button) return;
-
-        const item = button.closest('.ncm-sort-priority-item');
-        const sibling = button.dataset.move === 'up'
-          ? item.previousElementSibling
-          : item.nextElementSibling;
-        if (!sibling) return;
-
-        if (button.dataset.move === 'up') {
-          list.insertBefore(item, sibling);
-        } else {
-          list.insertBefore(sibling, item);
-        }
-        refreshPriorityIndexes(list);
-      });
+      bindSortableList(list);
 
       orderButtons.forEach((button) => {
         button.addEventListener('click', () => {
@@ -431,7 +681,6 @@ export function showHeatSortDialog(savedConfig) {
     html: `
       <div class="ncm-sort-intro">
         <p>选择热度指标和排序方向：</p>
-        <p class="ncm-sort-help">红心数量来自网易云红心接口，热度值来自歌曲详情，评论数量使用批量接口。</p>
       </div>
       <div class="ncm-sort-choice-list">
         ${options.map(option => {

@@ -1,4 +1,4 @@
-import { getOriginalIndex } from './order.js';
+import { stableSort } from './order.js';
 
 export const HEAT_SORT_METRICS = Object.freeze([
   { id: 'popularity', label: '热度值' },
@@ -54,13 +54,5 @@ export function cmpByHeat(config = DEFAULT_HEAT_SORT_CONFIG) {
 }
 
 export function sortSongsByHeat(items, config = DEFAULT_HEAT_SORT_CONFIG) {
-  const compare = cmpByHeat(config);
-
-  return items
-    .map((item, index) => ({
-      item,
-      index: getOriginalIndex(item, index)
-    }))
-    .sort((a, b) => compare(a.item, b.item) || a.index - b.index)
-    .map(({ item }) => item);
+  return stableSort(items, cmpByHeat(config));
 }

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.7.0
+// @version      0.8.0
 // @description  网易云音乐网页版歌单管理工具，支持按标题、歌手、发行日期或热度排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
@@ -161,6 +161,24 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     };
   }
 
+  // src/sort/order.js
+  function getOriginalIndex(item, fallbackIndex = 0) {
+    return Number.isInteger(item?.originalIndex) && item.originalIndex >= 0 ? item.originalIndex : fallbackIndex;
+  }
+  function stableSort(items, compare, getIndex = getOriginalIndex) {
+    return items.map((item, index) => ({
+      item,
+      index: getIndex(item, index),
+      sourceIndex: index
+    })).sort((a, b) => compare(a.item, b.item) || a.index - b.index || a.sourceIndex - b.sourceIndex).map(({ item }) => item);
+  }
+  function compareOriginalOrder(a, b) {
+    if (!Number.isInteger(a?.originalIndex) || !Number.isInteger(b?.originalIndex)) {
+      return 0;
+    }
+    return a.originalIndex - b.originalIndex;
+  }
+
   // src/data/playlist.js
   function getPlaylistTrackIds(playlist) {
     if (Array.isArray(playlist?.trackIds) && playlist.trackIds.length) {
@@ -194,19 +212,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         items.push(toSongItem(song, originalIndexById.get(String(song.id)) ?? index));
       }
     }
-    items.sort((a, b) => a.originalIndex - b.originalIndex);
-    return { playlist: pl, items, originalSongIds };
-  }
-
-  // src/sort/order.js
-  function getOriginalIndex(item, fallbackIndex = 0) {
-    return Number.isInteger(item?.originalIndex) && item.originalIndex >= 0 ? item.originalIndex : fallbackIndex;
-  }
-  function compareOriginalOrder(a, b) {
-    if (!Number.isInteger(a?.originalIndex) || !Number.isInteger(b?.originalIndex)) {
-      return 0;
-    }
-    return a.originalIndex - b.originalIndex;
+    return {
+      playlist: pl,
+      items: stableSort(items, (a, b) => a.originalIndex - b.originalIndex),
+      originalSongIds
+    };
   }
 
   // src/sort/title.js
@@ -349,16 +359,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (result) return result;
     return 0;
   }
-  function compareTitles(titleA, titleB, config) {
+  function compareTitles(titleA, titleB, config, categoryRanks) {
     if (config.directStringCompare) {
       const result = collator.compare(titleA, titleB);
       return result || compareUnicodeStrings(titleA, titleB);
     }
     const charsA = Array.from(titleA);
     const charsB = Array.from(titleB);
-    const categoryRanks = Object.fromEntries(
-      config.categoryOrder.map((categoryId, index) => [categoryId, index])
-    );
     const length = Math.min(charsA.length, charsB.length);
     for (let index = 0; index < length; index++) {
       const charA = charsA[index];
@@ -377,7 +384,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
   function createTextComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
     const normalizedConfig = normalizeTitleSortConfig(config);
-    return (textA = "", textB = "") => compareTitles(textA, textB, normalizedConfig);
+    const categoryRanks = Object.fromEntries(
+      normalizedConfig.categoryOrder.map((categoryId, index) => [categoryId, index])
+    );
+    return (textA = "", textB = "") => compareTitles(textA, textB, normalizedConfig, categoryRanks);
   }
   function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
     const compareText = createTextComparator(config);
@@ -471,6 +481,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       box-shadow: 0 18px 50px rgba(24, 34, 38, 0.18) !important;
       color: #263238 !important;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
+    }
+
+    .ncm-sort-manual-popup {
+      width: min(92vw, 720px) !important;
     }
 
     .ncm-sort-popup .swal2-title {
@@ -783,6 +797,77 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       list-style: none;
     }
 
+    .ncm-sort-scroll-container {
+      max-height: min(62vh, 560px);
+      overflow-y: auto;
+      padding: 2px 5px 2px 0;
+      scrollbar-color: #a9c8c4 #f1f5f4;
+      scrollbar-width: thin;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar-track {
+      border-radius: 4px;
+      background: #f1f5f4;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar-thumb {
+      border: 2px solid #f1f5f4;
+      border-radius: 4px;
+      background: #a9c8c4;
+    }
+
+    .ncm-sort-song-item {
+      min-height: 52px;
+    }
+
+    .ncm-sort-drag-placeholder {
+      box-sizing: border-box;
+      min-height: 38px;
+      border: 1px dashed #8dbbb5;
+      border-radius: 7px;
+      background: #edf6f4;
+    }
+
+    .ncm-sort-song-list .ncm-sort-drag-placeholder {
+      min-height: 52px;
+    }
+
+    .ncm-sort-song-name {
+      flex: 1 1 auto;
+    }
+
+    .ncm-sort-song-details {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+      flex: 1 1 auto;
+      text-align: left;
+    }
+
+    .ncm-sort-song-title,
+    .ncm-sort-song-meta {
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      text-align: left;
+    }
+
+    .ncm-sort-song-title {
+      color: #2e393d;
+      line-height: 1.4;
+    }
+
+    .ncm-sort-song-meta {
+      color: #7a8588;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+    }
+
     .ncm-sort-priority-item {
       display: flex;
       min-height: 38px;
@@ -794,6 +879,40 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       border: 1px solid #e1e7e8;
       border-radius: 7px;
       background: #fbfcfc;
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
+    }
+
+    .ncm-sort-priority-item:hover {
+      border-color: #b9d6d2;
+      background: #f6fbfa;
+    }
+
+    .ncm-sort-priority-item.is-dragging {
+      opacity: 0.55;
+      border-color: #5c9a93;
+      background: #e5f2f0;
+      box-shadow: 0 5px 14px rgba(47, 125, 117, 0.16);
+      cursor: grabbing;
+    }
+
+    .ncm-sort-priority-item.is-drag-source-hidden {
+      position: fixed !important;
+      top: -10000px !important;
+      left: -10000px !important;
+      width: 1px !important;
+      height: 1px !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.ncm-sort-is-pointer-dragging,
+    body.ncm-sort-is-pointer-dragging * {
+      cursor: grabbing !important;
     }
 
     .ncm-sort-priority-name {
@@ -819,33 +938,53 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       font-weight: 700;
     }
 
-    .ncm-sort-priority-actions {
-      display: inline-flex;
-      gap: 4px;
+    .ncm-sort-song-list .ncm-sort-priority-index {
+      width: 3.2em;
+      min-width: 3.2em;
+      height: 24px;
+      border-radius: 6px;
     }
 
-    .ncm-sort-icon-button {
+    .ncm-sort-priority-actions {
       display: inline-flex;
-      width: 28px;
-      height: 28px;
+      align-items: center;
+    }
+
+    .ncm-sort-drag-handle {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
       align-items: center;
       justify-content: center;
       margin: 0 !important;
       padding: 0 !important;
-      border: 1px solid #dce4e5 !important;
+      border: 1px solid #dce4e5;
       border-radius: 6px !important;
-      background: #fff !important;
-      color: #536166 !important;
-      font-size: 15px !important;
-      line-height: 1 !important;
-      cursor: pointer;
-      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+      background: #fff;
+      color: #6a777b;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      line-height: 1;
+      cursor: grab;
+      touch-action: none;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
 
-    .ncm-sort-icon-button:hover {
-      border-color: #73a9a3 !important;
-      background: #edf6f4 !important;
-      color: #205e58 !important;
+    .ncm-sort-drag-handle:hover,
+    .ncm-sort-drag-handle:focus-visible {
+      border-color: #73a9a3;
+      background: #edf6f4;
+      color: #205e58;
+      outline: none;
+    }
+
+    .ncm-sort-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .ncm-sort-priority-panel.is-disabled .ncm-sort-drag-handle {
+      cursor: not-allowed;
     }
 
     .ncm-sort-help {
@@ -934,6 +1073,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         padding: 22px 18px 18px !important;
       }
 
+      .ncm-sort-manual-popup {
+        width: calc(100vw - 24px) !important;
+      }
+
       .ncm-sort-popup .swal2-title {
         margin-bottom: 16px !important;
         font-size: 19px !important;
@@ -952,6 +1095,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
 
       .ncm-sort-select {
         width: 100%;
+      }
+
+      .ncm-sort-scroll-container {
+        max-height: 58vh;
       }
 
       .ncm-sort-fields {
@@ -1063,12 +1210,14 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       }
       group.items.push({ item, index: originalIndex });
     });
-    if (normalizedConfig.sortArtistsByName) {
-      groups.sort((a, b) => compareArtist(a.artist, b.artist) || a.index - b.index);
-    }
-    return groups.flatMap((group) => {
+    const orderedGroups = normalizedConfig.sortArtistsByName ? stableSort(groups, (a, b) => compareArtist(a.artist, b.artist), (group) => group.index) : groups;
+    return orderedGroups.flatMap((group) => {
       if (normalizedConfig.sortSameArtistByDate) {
-        group.items.sort((a, b) => compareDate(a.item, b.item) || a.index - b.index);
+        group.items = stableSort(
+          group.items,
+          (a, b) => compareDate(a.item, b.item),
+          (item) => item.index
+        );
       }
       return group.items.map(({ item }) => item);
     });
@@ -1174,11 +1323,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     };
   }
   function sortSongsByHeat(items, config = DEFAULT_HEAT_SORT_CONFIG) {
-    const compare = cmpByHeat(config);
-    return items.map((item, index) => ({
-      item,
-      index: getOriginalIndex(item, index)
-    })).sort((a, b) => compare(a.item, b.item) || a.index - b.index).map(({ item }) => item);
+    return stableSort(items, cmpByHeat(config));
   }
 
   // src/ui/dialogs.js
@@ -1201,6 +1346,20 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
     return ordered;
   }
+  function escapeHtml(value) {
+    return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#39;");
+  }
+  function createDragHandle() {
+    return `
+    <span
+      class="ncm-sort-drag-handle"
+      role="button"
+      tabindex="0"
+      title="\u62D6\u52A8\u8C03\u6574\u987A\u5E8F"
+      aria-label="\u62D6\u52A8\u8C03\u6574\u987A\u5E8F"
+    >\u22EE\u22EE</span>
+  `;
+  }
   function createTitleCategoryList(categories) {
     return categories.map((category, index) => `
     <li class="ncm-sort-priority-item" data-category="${category.id}">
@@ -1209,8 +1368,23 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         ${category.label}
       </span>
       <span class="ncm-sort-priority-actions">
-        <button type="button" class="ncm-sort-icon-button" data-move="up" title="\u4E0A\u79FB" aria-label="\u4E0A\u79FB">\u2191</button>
-        <button type="button" class="ncm-sort-icon-button" data-move="down" title="\u4E0B\u79FB" aria-label="\u4E0B\u79FB">\u2193</button>
+        ${createDragHandle()}
+      </span>
+    </li>
+  `).join("");
+  }
+  function createManualSongList(items) {
+    return items.map((item, index) => `
+    <li class="ncm-sort-priority-item ncm-sort-song-item" data-song-id="${escapeHtml(item.id)}">
+      <span class="ncm-sort-priority-name ncm-sort-song-name">
+        <span class="ncm-sort-priority-index">${index + 1}</span>
+        <span class="ncm-sort-song-details">
+          <span class="ncm-sort-song-title">${escapeHtml(item.title || "\u672A\u547D\u540D\u6B4C\u66F2")}</span>
+          <span class="ncm-sort-song-meta">${escapeHtml(item.artist || "\u672A\u77E5\u6B4C\u624B")}${item.album ? ` \xB7 ${escapeHtml(item.album)}` : ""}</span>
+        </span>
+      </span>
+      <span class="ncm-sort-priority-actions">
+        ${createDragHandle()}
       </span>
     </li>
   `).join("");
@@ -1236,10 +1410,193 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       item.querySelector(".ncm-sort-priority-index").textContent = index + 1;
     });
   }
+  function movePriorityItem(list, item, direction) {
+    const sibling = direction === "up" ? item.previousElementSibling : item.nextElementSibling;
+    if (!sibling) return;
+    if (direction === "up") {
+      list.insertBefore(item, sibling);
+    } else {
+      list.insertBefore(sibling, item);
+    }
+    refreshPriorityIndexes(list);
+    item.querySelector(".ncm-sort-drag-handle").focus();
+  }
+  function bindSortableList(list) {
+    const dragThreshold = 5;
+    let pendingDrag = null;
+    let draggedItem = null;
+    let dropPlaceholder = null;
+    let dragFrame = 0;
+    let latestDragPosition = null;
+    let originalNextSibling = null;
+    const cancelDragFrame = () => {
+      if (!dragFrame) return;
+      cancelAnimationFrame(dragFrame);
+      dragFrame = 0;
+    };
+    const scheduleDragFrame = () => {
+      if (!dragFrame) {
+        dragFrame = requestAnimationFrame(updateDropPlaceholder);
+      }
+    };
+    const updateDropPlaceholder = () => {
+      dragFrame = 0;
+      if (!draggedItem || !dropPlaceholder || !latestDragPosition) return;
+      const { clientX, clientY } = latestDragPosition;
+      const scrollContainer = list.closest(".ncm-sort-scroll-container");
+      let didScroll = false;
+      if (scrollContainer) {
+        const rect = scrollContainer.getBoundingClientRect();
+        const edgeSize = 44;
+        const previousScrollTop = scrollContainer.scrollTop;
+        if (clientY < rect.top + edgeSize) {
+          scrollContainer.scrollTop -= 14;
+        } else if (clientY > rect.bottom - edgeSize) {
+          scrollContainer.scrollTop += 14;
+        }
+        didScroll = scrollContainer.scrollTop !== previousScrollTop;
+      }
+      const target = document.elementFromPoint(clientX, clientY)?.closest(".ncm-sort-priority-item");
+      if (target?.parentElement === list) {
+        const rect = target.getBoundingClientRect();
+        const insertBefore = clientY < rect.top + rect.height / 2;
+        if (insertBefore) {
+          if (dropPlaceholder.nextElementSibling !== target) {
+            list.insertBefore(dropPlaceholder, target);
+          }
+        } else if (target.nextElementSibling !== dropPlaceholder) {
+          list.insertBefore(dropPlaceholder, target.nextSibling);
+        }
+      } else {
+        const listRect = list.getBoundingClientRect();
+        if (clientY <= listRect.top) {
+          list.prepend(dropPlaceholder);
+        } else if (clientY >= listRect.bottom) {
+          list.append(dropPlaceholder);
+        }
+      }
+      if (didScroll) {
+        scheduleDragFrame();
+      }
+    };
+    const startDrag = (item) => {
+      draggedItem = item;
+      originalNextSibling = item.nextElementSibling;
+      dropPlaceholder = document.createElement("li");
+      dropPlaceholder.className = "ncm-sort-drag-placeholder";
+      dropPlaceholder.setAttribute("aria-hidden", "true");
+      dropPlaceholder.style.height = `${item.getBoundingClientRect().height}px`;
+      list.insertBefore(dropPlaceholder, item);
+      item.classList.add("is-dragging", "is-drag-source-hidden");
+      document.body.classList.add("ncm-sort-is-pointer-dragging");
+    };
+    const removePointerListeners = () => {
+      window.removeEventListener("pointermove", handlePointerMove, true);
+      window.removeEventListener("pointerup", handlePointerUp, true);
+      window.removeEventListener("pointercancel", handlePointerCancel, true);
+      window.removeEventListener("blur", handlePointerCancel);
+      window.removeEventListener("keydown", handleDragKeydown, true);
+    };
+    const finishDrag = (commit) => {
+      if (commit && dragFrame) {
+        cancelDragFrame();
+        updateDropPlaceholder();
+      }
+      cancelDragFrame();
+      latestDragPosition = null;
+      if (draggedItem && dropPlaceholder?.parentElement === list) {
+        if (commit) {
+          list.insertBefore(draggedItem, dropPlaceholder);
+        } else if (originalNextSibling?.parentElement === list) {
+          list.insertBefore(draggedItem, originalNextSibling);
+        } else {
+          list.append(draggedItem);
+        }
+        dropPlaceholder.remove();
+        draggedItem.classList.remove("is-dragging", "is-drag-source-hidden");
+        refreshPriorityIndexes(list);
+      }
+      document.body.classList.remove("ncm-sort-is-pointer-dragging");
+      pendingDrag = null;
+      draggedItem = null;
+      dropPlaceholder = null;
+      originalNextSibling = null;
+      removePointerListeners();
+    };
+    function handlePointerMove(event) {
+      if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) return;
+      if (!draggedItem) {
+        const distance = Math.hypot(
+          event.clientX - pendingDrag.startX,
+          event.clientY - pendingDrag.startY
+        );
+        if (distance < dragThreshold) return;
+        startDrag(pendingDrag.item);
+      }
+      event.preventDefault();
+      latestDragPosition = {
+        clientX: event.clientX,
+        clientY: event.clientY
+      };
+      scheduleDragFrame();
+    }
+    function handlePointerUp(event) {
+      if (!pendingDrag || event.pointerId !== pendingDrag.pointerId) return;
+      finishDrag(Boolean(draggedItem));
+    }
+    function handlePointerCancel(event) {
+      if (event?.pointerId != null && pendingDrag && event.pointerId !== pendingDrag.pointerId) return;
+      finishDrag(false);
+    }
+    function handleDragKeydown(event) {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      finishDrag(false);
+    }
+    list.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      if (list.closest("fieldset")?.disabled) return;
+      const item = event.target.closest(".ncm-sort-priority-item");
+      if (!item || item.parentElement !== list) return;
+      if (event.pointerType !== "mouse" && !event.target.closest(".ncm-sort-drag-handle")) return;
+      event.preventDefault();
+      event.target.closest(".ncm-sort-drag-handle")?.focus({ preventScroll: true });
+      pendingDrag = {
+        item,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY
+      };
+      window.addEventListener("pointermove", handlePointerMove, { capture: true, passive: false });
+      window.addEventListener("pointerup", handlePointerUp, true);
+      window.addEventListener("pointercancel", handlePointerCancel, true);
+      window.addEventListener("blur", handlePointerCancel);
+      window.addEventListener("keydown", handleDragKeydown, true);
+    });
+    list.addEventListener("keydown", (event) => {
+      const handle = event.target.closest(".ncm-sort-drag-handle");
+      if (!handle) return;
+      if (list.closest("fieldset")?.disabled) return;
+      const item = handle.closest(".ncm-sort-priority-item");
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        movePriorityItem(list, item, "up");
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        movePriorityItem(list, item, "down");
+      }
+    });
+  }
+  function readManualSongOrder() {
+    return [...document.querySelectorAll("#manual-song-list [data-song-id]")].map((item) => item.dataset.songId);
+  }
   function setPriorityDisabled(disabled, prefix = "title") {
     const fieldset = document.getElementById(`${prefix}-category-priority`);
     fieldset.disabled = disabled;
     fieldset.classList.toggle("is-disabled", disabled);
+    fieldset.querySelectorAll(".ncm-sort-priority-item").forEach((item) => {
+      item.querySelector(".ncm-sort-drag-handle")?.setAttribute("aria-disabled", String(disabled));
+    });
   }
   function readDateSortConfig(prefix = "date") {
     const selectedOrder = document.querySelector(`[data-${prefix}-order].is-selected`);
@@ -1324,22 +1681,41 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         directCompare.addEventListener("change", () => {
           setPriorityDisabled(directCompare.checked);
         });
-        list.addEventListener("click", (event) => {
-          const button = event.target.closest("[data-move]");
-          if (!button) return;
-          const item = button.closest(".ncm-sort-priority-item");
-          const sibling = button.dataset.move === "up" ? item.previousElementSibling : item.nextElementSibling;
-          if (!sibling) return;
-          if (button.dataset.move === "up") {
-            list.insertBefore(item, sibling);
-          } else {
-            list.insertBefore(sibling, item);
-          }
-          refreshPriorityIndexes(list);
-        });
+        bindSortableList(list);
         setPriorityDisabled(directCompare.checked);
       },
       preConfirm: () => readTitleSortConfig(savedConfig)
+    });
+  }
+  function showManualSortDialog(items) {
+    return Swal.fire({
+      title: "\u624B\u52A8\u6392\u5E8F",
+      html: `
+      <div class="ncm-sort-intro">
+        <p>\u62D6\u52A8\u6B4C\u66F2\u8C03\u6574\u6B4C\u5355\u987A\u5E8F</p>
+        <p class="ncm-sort-detected">\u5171 ${items.length} \u9996\u6B4C\u66F2</p>
+      </div>
+      <div class="ncm-sort-scroll-container">
+        <ol id="manual-song-list" class="ncm-sort-priority-list ncm-sort-song-list">
+          ${createManualSongList(items)}
+        </ol>
+      </div>
+    `,
+      showConfirmButton: true,
+      showCancelButton: true,
+      confirmButtonText: "\u4FDD\u5B58\u6392\u5E8F",
+      cancelButtonText: "\u53D6\u6D88",
+      focusConfirm: false,
+      customClass: {
+        ...swalClasses,
+        popup: "ncm-sort-popup ncm-sort-manual-popup"
+      },
+      didOpen: () => {
+        bindSortableList(document.getElementById("manual-song-list"));
+      },
+      preConfirm: () => ({
+        orderedSongIds: readManualSongOrder()
+      })
     });
   }
   async function showDateSortDialog() {
@@ -1502,19 +1878,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         directCompare.addEventListener("change", () => {
           setPriorityDisabled(directCompare.checked, "artist");
         });
-        list.addEventListener("click", (event) => {
-          const button = event.target.closest("[data-move]");
-          if (!button) return;
-          const item = button.closest(".ncm-sort-priority-item");
-          const sibling = button.dataset.move === "up" ? item.previousElementSibling : item.nextElementSibling;
-          if (!sibling) return;
-          if (button.dataset.move === "up") {
-            list.insertBefore(item, sibling);
-          } else {
-            list.insertBefore(sibling, item);
-          }
-          refreshPriorityIndexes(list);
-        });
+        bindSortableList(list);
         orderButtons.forEach((button) => {
           button.addEventListener("click", () => {
             orderButtons.forEach((item) => {
@@ -1555,7 +1919,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       html: `
       <div class="ncm-sort-intro">
         <p>\u9009\u62E9\u70ED\u5EA6\u6307\u6807\u548C\u6392\u5E8F\u65B9\u5411\uFF1A</p>
-        <p class="ncm-sort-help">\u7EA2\u5FC3\u6570\u91CF\u6765\u81EA\u7F51\u6613\u4E91\u7EA2\u5FC3\u63A5\u53E3\uFF0C\u70ED\u5EA6\u503C\u6765\u81EA\u6B4C\u66F2\u8BE6\u60C5\uFF0C\u8BC4\u8BBA\u6570\u91CF\u4F7F\u7528\u6279\u91CF\u63A5\u53E3\u3002</p>
       </div>
       <div class="ncm-sort-choice-list">
         ${options.map((option) => {
@@ -1778,7 +2141,7 @@ ${operationText}`,
     await saveTitleSortConfig(settings.value);
     if (!confirm("\u5C06\u76F4\u63A5\u4FEE\u6539\u5F53\u524D\u6B4C\u5355\u5185\u6B4C\u66F2\u987A\u5E8F\uFF0C\u6392\u5E8F\u540E\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u3002\u7EE7\u7EED\uFF1F")) return;
     showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-    const ordered = items.slice().sort(createTitleComparator(settings.value)).map((x) => x.id);
+    const ordered = stableSort(items, createTitleComparator(settings.value)).map((x) => x.id);
     const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
     const res = await updatePlaylistOrder(pid, ordered);
@@ -1840,7 +2203,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       const { playlist, items, originalSongIds } = await getAllSongs(pid);
       await ensurePublishTimes(items);
       showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u6392\u5E8F...`);
-      const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map((x) => x.id);
+      const ordered = stableSort(items, cmpByDate(descending, dateSortConfig)).map((x) => x.id);
       const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
       showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
       const res = await updatePlaylistOrder(pid, ordered);
@@ -2084,6 +2447,51 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
   }
 
+  // src/operations/manual-sort.js
+  function sameOrder(left, right) {
+    return left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
+  }
+  async function manualSortSongs(pid) {
+    showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+    const { playlist, items, originalSongIds } = await getAllSongs(pid);
+    const result = await showManualSortDialog(items);
+    if (!result.isConfirmed) return;
+    const orderedSongIds = result.value?.orderedSongIds || [];
+    if (orderedSongIds.length !== items.length) {
+      throw new Error("\u624B\u52A8\u6392\u5E8F\u5217\u8868\u4E0E\u6B4C\u5355\u6B4C\u66F2\u6570\u91CF\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u91CD\u8BD5");
+    }
+    if (sameOrder(orderedSongIds, originalSongIds)) {
+      Swal.fire({
+        icon: "info",
+        title: "\u987A\u5E8F\u672A\u6539\u53D8",
+        text: `${playlist.name}
+\u672A\u5199\u56DE\u6B4C\u5355`,
+        customClass: swalClasses
+      });
+      return;
+    }
+    const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
+    showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+    const response = await updatePlaylistOrder(pid, orderedSongIds);
+    if (response && response.code === 200) {
+      Swal.fire({
+        icon: "success",
+        title: "\u6392\u5E8F\u5B8C\u6210",
+        text: `${playlist.name}
+\u5171 ${orderedSongIds.length} \u9996
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        customClass: swalClasses
+      });
+    } else {
+      Swal.fire({
+        icon: "error",
+        title: "\u6392\u5E8F\u5931\u8D25",
+        text: JSON.stringify(response),
+        customClass: swalClasses
+      });
+    }
+  }
+
   // src/operations/batch-move.js
   async function batchMoveSongs(pid) {
     const result = await showBatchMoveDialog();
@@ -2296,6 +2704,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
         <button id="sort-by-heat" class="ncm-sort-menu-button">\u6309\u70ED\u5EA6\u6392\u5E8F</button>
+        <button id="manual-sort" class="ncm-sort-menu-button">\u624B\u52A8\u6392\u5E8F</button>
         ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">\u6062\u590D\u4E0A\u6B21\u64CD\u4F5C\u524D\u987A\u5E8F</button>' : ""}
         <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
         <button id="batch-delete" class="ncm-sort-menu-button ncm-sort-menu-button-danger">\u6279\u91CF\u5220\u9664\u6B4C\u66F2</button>
@@ -2351,6 +2760,20 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
           Swal.close();
           try {
             await sortByHeat(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
+        document.getElementById("manual-sort").addEventListener("click", async () => {
+          Swal.close();
+          try {
+            await manualSortSongs(pid);
           } catch (e) {
             console.error(e);
             Swal.fire({

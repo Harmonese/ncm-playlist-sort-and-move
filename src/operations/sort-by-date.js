@@ -3,6 +3,7 @@ import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { ensurePublishTimes } from '../data/publish-time.js';
 import { cmpByDate } from '../sort/date.js';
+import { stableSort } from '../sort/order.js';
 import { saveDateSortSettings } from '../settings/date-sort.js';
 import { showDateSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
@@ -24,7 +25,7 @@ export async function performDateSort(pid, descending, dateSortConfig) {
     await ensurePublishTimes(items);
 
     showToast(`获取完成：${items.length} 首，开始排序...`);
-    const ordered = items.slice().sort(cmpByDate(descending, dateSortConfig)).map(x => x.id);
+    const ordered = stableSort(items, cmpByDate(descending, dateSortConfig)).map(x => x.id);
 
     const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: 'sort' });
     showToast('写回歌单顺序(op=update)...');

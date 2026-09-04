@@ -2,6 +2,7 @@ import { showToast } from '../utils/dom.js';
 import { updatePlaylistOrder } from '../ncm/api.js';
 import { getAllSongs } from '../data/playlist.js';
 import { createTitleComparator, detectTextCategoryIds } from '../sort/title.js';
+import { stableSort } from '../sort/order.js';
 import { saveTitleSortConfig } from '../settings/title-sort.js';
 import { showTitleSortDialog } from '../ui/dialogs.js';
 import { swalClasses } from '../ui/styles.js';
@@ -20,7 +21,7 @@ export async function sortByTitle(pid) {
   if (!confirm('将直接修改当前歌单内歌曲顺序，排序后可从工具菜单恢复。继续？')) return;
 
   showToast(`获取完成：${items.length} 首，开始排序...`);
-  const ordered = items.slice().sort(createTitleComparator(settings.value)).map(x => x.id);
+  const ordered = stableSort(items, createTitleComparator(settings.value)).map(x => x.id);
 
   const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: 'sort' });
   showToast('写回歌单顺序(op=update)...');

@@ -28,6 +28,10 @@ export function installStyles() {
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif !important;
     }
 
+    .ncm-sort-manual-popup {
+      width: min(92vw, 720px) !important;
+    }
+
     .ncm-sort-popup .swal2-title {
       margin: 0 0 20px !important;
       padding: 0 !important;
@@ -338,6 +342,77 @@ export function installStyles() {
       list-style: none;
     }
 
+    .ncm-sort-scroll-container {
+      max-height: min(62vh, 560px);
+      overflow-y: auto;
+      padding: 2px 5px 2px 0;
+      scrollbar-color: #a9c8c4 #f1f5f4;
+      scrollbar-width: thin;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar {
+      width: 8px;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar-track {
+      border-radius: 4px;
+      background: #f1f5f4;
+    }
+
+    .ncm-sort-scroll-container::-webkit-scrollbar-thumb {
+      border: 2px solid #f1f5f4;
+      border-radius: 4px;
+      background: #a9c8c4;
+    }
+
+    .ncm-sort-song-item {
+      min-height: 52px;
+    }
+
+    .ncm-sort-drag-placeholder {
+      box-sizing: border-box;
+      min-height: 38px;
+      border: 1px dashed #8dbbb5;
+      border-radius: 7px;
+      background: #edf6f4;
+    }
+
+    .ncm-sort-song-list .ncm-sort-drag-placeholder {
+      min-height: 52px;
+    }
+
+    .ncm-sort-song-name {
+      flex: 1 1 auto;
+    }
+
+    .ncm-sort-song-details {
+      display: grid;
+      min-width: 0;
+      gap: 2px;
+      flex: 1 1 auto;
+      text-align: left;
+    }
+
+    .ncm-sort-song-title,
+    .ncm-sort-song-meta {
+      display: block;
+      min-width: 0;
+      overflow-wrap: anywhere;
+      text-align: left;
+    }
+
+    .ncm-sort-song-title {
+      color: #2e393d;
+      line-height: 1.4;
+    }
+
+    .ncm-sort-song-meta {
+      color: #7a8588;
+      font-size: 12px;
+      font-weight: 400;
+      line-height: 1.35;
+    }
+
     .ncm-sort-priority-item {
       display: flex;
       min-height: 38px;
@@ -349,6 +424,40 @@ export function installStyles() {
       border: 1px solid #e1e7e8;
       border-radius: 7px;
       background: #fbfcfc;
+      cursor: grab;
+      user-select: none;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease, opacity 0.15s ease, background-color 0.15s ease;
+    }
+
+    .ncm-sort-priority-item:hover {
+      border-color: #b9d6d2;
+      background: #f6fbfa;
+    }
+
+    .ncm-sort-priority-item.is-dragging {
+      opacity: 0.55;
+      border-color: #5c9a93;
+      background: #e5f2f0;
+      box-shadow: 0 5px 14px rgba(47, 125, 117, 0.16);
+      cursor: grabbing;
+    }
+
+    .ncm-sort-priority-item.is-drag-source-hidden {
+      position: fixed !important;
+      top: -10000px !important;
+      left: -10000px !important;
+      width: 1px !important;
+      height: 1px !important;
+      min-height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    body.ncm-sort-is-pointer-dragging,
+    body.ncm-sort-is-pointer-dragging * {
+      cursor: grabbing !important;
     }
 
     .ncm-sort-priority-name {
@@ -374,33 +483,53 @@ export function installStyles() {
       font-weight: 700;
     }
 
-    .ncm-sort-priority-actions {
-      display: inline-flex;
-      gap: 4px;
+    .ncm-sort-song-list .ncm-sort-priority-index {
+      width: 3.2em;
+      min-width: 3.2em;
+      height: 24px;
+      border-radius: 6px;
     }
 
-    .ncm-sort-icon-button {
+    .ncm-sort-priority-actions {
       display: inline-flex;
-      width: 28px;
-      height: 28px;
+      align-items: center;
+    }
+
+    .ncm-sort-drag-handle {
+      display: inline-flex;
+      width: 30px;
+      height: 30px;
       align-items: center;
       justify-content: center;
       margin: 0 !important;
       padding: 0 !important;
-      border: 1px solid #dce4e5 !important;
+      border: 1px solid #dce4e5;
       border-radius: 6px !important;
-      background: #fff !important;
-      color: #536166 !important;
-      font-size: 15px !important;
-      line-height: 1 !important;
-      cursor: pointer;
-      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease !important;
+      background: #fff;
+      color: #6a777b;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      line-height: 1;
+      cursor: grab;
+      touch-action: none;
+      transition: background-color 0.15s ease, border-color 0.15s ease, color 0.15s ease;
     }
 
-    .ncm-sort-icon-button:hover {
-      border-color: #73a9a3 !important;
-      background: #edf6f4 !important;
-      color: #205e58 !important;
+    .ncm-sort-drag-handle:hover,
+    .ncm-sort-drag-handle:focus-visible {
+      border-color: #73a9a3;
+      background: #edf6f4;
+      color: #205e58;
+      outline: none;
+    }
+
+    .ncm-sort-drag-handle:active {
+      cursor: grabbing;
+    }
+
+    .ncm-sort-priority-panel.is-disabled .ncm-sort-drag-handle {
+      cursor: not-allowed;
     }
 
     .ncm-sort-help {
@@ -489,6 +618,10 @@ export function installStyles() {
         padding: 22px 18px 18px !important;
       }
 
+      .ncm-sort-manual-popup {
+        width: calc(100vw - 24px) !important;
+      }
+
       .ncm-sort-popup .swal2-title {
         margin-bottom: 16px !important;
         font-size: 19px !important;
@@ -507,6 +640,10 @@ export function installStyles() {
 
       .ncm-sort-select {
         width: 100%;
+      }
+
+      .ncm-sort-scroll-container {
+        max-height: 58vh;
       }
 
       .ncm-sort-fields {

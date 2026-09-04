@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Harmonese/ncm-playlist-sort-and-move/actions/workflows/build.yml"><img src="https://github.com/Harmonese/ncm-playlist-sort-and-move/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status"></a>
   <a href="https://github.com/Harmonese/ncm-playlist-sort-and-move/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Harmonese/ncm-playlist-sort-and-move" alt="License"></a>
-  <img src="https://img.shields.io/badge/version-0.7.0-e00214" alt="Version 0.7.0">
+  <img src="https://img.shields.io/badge/version-0.8.0-e00214" alt="Version 0.8.0">
   <img src="https://img.shields.io/badge/userscript-Tampermonkey%20%7C%20Violentmonkey-e00214" alt="Userscript manager compatibility">
 </p>
 
@@ -23,6 +23,7 @@
 - 按发行日期排序，支持从新到旧和从旧到新，并可在日期相同时按专辑名称、专辑内曲目顺序排列。
 - 按歌手排序，使用与标题排序相同的文字比较规则，并可在同一歌手内按发行时间排序。
 - 按热度排序，支持按红心数量、热度值或评论数量进行升序、降序排列。
+- 手动拖动歌曲或文字体系优先级调整顺序，支持键盘上下移动。
 - 按序号区间批量移动歌曲。
 - 按序号区间批量删除歌曲。
 - 排序、移动或删除后恢复上一次操作前的歌单顺序。
@@ -47,6 +48,7 @@
 - 按发行日期排序：根据歌曲或专辑发行时间排序，可在确认前选择排序方向，以及日期相同时的专辑和曲目顺序。
 - 按歌手排序：按歌手名称从左到右比较，使用与标题排序相同的文字比较规则。歌手分组可以按名称排序，也可以保持原歌单中首次出现的顺序；每个分组内部可以保持原顺序或按发行日期排序。发行日期方向和“按发行日期排序”共享。
 - 按热度排序：可以选择红心数量、热度值或评论数量，并选择升序或降序。红心数量使用网易云 `/api/song/red/count` 接口；热度值使用歌曲详情接口提供的 `popularity` 字段；评论数量使用批量接口获取。缺失或请求失败的指标排在末尾，相同指标保持原歌单顺序。
+- 手动排序：在手动排序弹窗中拖动歌曲调整顺序，也可以聚焦右侧拖拽手柄后使用方向键移动；确认后会写回当前歌单。
 - 批量移动歌曲：输入起始位置、结束位置和目标位置，将指定区间移动到目标歌曲后面。
 - 批量删除歌曲：输入起始位置和结束位置，删除对应区间内的歌曲。
 

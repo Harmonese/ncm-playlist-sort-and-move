@@ -1,6 +1,7 @@
 import { sleep, showToast } from '../utils/dom.js';
 import { fetchPlaylistDetail, fetchSongDetailByIds } from '../ncm/api.js';
 import { toSongItem } from './song.js';
+import { stableSort } from '../sort/order.js';
 
 export function getPlaylistTrackIds(playlist) {
   if (Array.isArray(playlist?.trackIds) && playlist.trackIds.length) {
@@ -39,6 +40,9 @@ export async function getAllSongs(pid) {
     }
   }
 
-  items.sort((a, b) => a.originalIndex - b.originalIndex);
-  return { playlist: pl, items, originalSongIds };
+  return {
+    playlist: pl,
+    items: stableSort(items, (a, b) => a.originalIndex - b.originalIndex),
+    originalSongIds
+  };
 }

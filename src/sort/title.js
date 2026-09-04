@@ -179,7 +179,7 @@ function compareCharacters(a, b, category, chineseSort) {
   return 0;
 }
 
-function compareTitles(titleA, titleB, config) {
+function compareTitles(titleA, titleB, config, categoryRanks) {
   if (config.directStringCompare) {
     const result = collator.compare(titleA, titleB);
     return result || compareUnicodeStrings(titleA, titleB);
@@ -187,9 +187,6 @@ function compareTitles(titleA, titleB, config) {
 
   const charsA = Array.from(titleA);
   const charsB = Array.from(titleB);
-  const categoryRanks = Object.fromEntries(
-    config.categoryOrder.map((categoryId, index) => [categoryId, index])
-  );
   const length = Math.min(charsA.length, charsB.length);
 
   for (let index = 0; index < length; index++) {
@@ -214,8 +211,11 @@ function compareTitles(titleA, titleB, config) {
 
 export function createTextComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
   const normalizedConfig = normalizeTitleSortConfig(config);
+  const categoryRanks = Object.fromEntries(
+    normalizedConfig.categoryOrder.map((categoryId, index) => [categoryId, index])
+  );
 
-  return (textA = '', textB = '') => compareTitles(textA, textB, normalizedConfig);
+  return (textA = '', textB = '') => compareTitles(textA, textB, normalizedConfig, categoryRanks);
 }
 
 export function createTitleComparator(config = DEFAULT_TITLE_SORT_CONFIG) {
