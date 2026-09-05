@@ -3,19 +3,32 @@ import {
   deleteSongsFromPlaylist,
   fetchAlbumDetail,
   fetchPlaylistDetail,
+  fetchSongDetailByIds,
   updatePlaylistOrder
 } from '../ncm/api.js';
 import {
   buildPlaylistScript,
-  expandPlaylistScript,
+  parsePlaylistScript,
+  parseSongOnlyPlaylistScript
+} from '../data/playlist-script-protocol.js';
+import {
   getPlaylistScriptDiff,
   getPlaylistScriptState,
-  parsePlaylistScript,
+  resolveCommand,
+  resolvePlaylistCommands,
+  resolveSortConfig,
   sameSongOrder
-} from '../data/playlist-script.js';
+} from '../data/playlist-plan.js';
+import { ensureHeatMetric } from '../data/heat.js';
 import { getAllSongs, getPlaylistTrackIds } from '../data/playlist.js';
+import { ensurePublishTimes } from '../data/publish-time.js';
+import { toSongItem } from '../data/song.js';
+import { loadArtistSortSettings } from '../settings/artist-sort.js';
+import { loadDateSortSettings } from '../settings/date-sort.js';
+import { loadHeatSortConfig } from '../settings/heat-sort.js';
 import { loadPlaylistScript, savePlaylistScript } from '../settings/playlist-script.js';
 import { saveOrderBackup } from '../settings/order-backup.js';
+import { loadTitleSortConfig } from '../settings/title-sort.js';
 import {
   showPlaylistScriptDialog,
   showPlaylistScriptPreviewDialog
@@ -44,22 +57,100 @@ function getDriftWarning(state) {
   return '当前歌单已偏离上次应用后的状态。继续应用会以本地脚本覆盖当前歌单变化。';
 }
 
+async function getEditorScript(saved, currentIds, resolveScript) {
+  if (!saved) return buildPlaylistScript(currentIds);
+  if (!saved.scriptText.trim()) return '';
+
+  let commands;
+  try {
+    commands = parsePlaylistScript(saved.scriptText);
+  } catch (error) {
+    throw new Error(`已保存的歌单编排脚本无法解析，已停止操作：${error.message || String(error)}`);
+  }
+
+  if (!commands.some(command => command.type === 'album')) {
+    return buildPlaylistScript(commands.map(command => command.id));
+  }
+
+  try {
+    showToast('正在将旧版专辑命令展开为歌曲命令...');
+    const expanded = await resolveScript(commands);
+    return buildPlaylistScript(expanded.songIds);
+  } catch (error) {
+    throw new Error(`已保存的专辑命令无法安全展开，已停止操作：${error.message || String(error)}`);
+  }
+}
+
 export async function editPlaylistScript(pid) {
   showToast('开始获取歌单歌曲...');
   const { playlist, items, originalSongIds } = await getAllSongs(pid);
   const saved = await loadPlaylistScript(pid);
   const currentIds = normalizeIds(originalSongIds);
-  const initialScript = saved?.scriptText || buildPlaylistScript(currentIds);
-  const state = getPlaylistScriptState(currentIds, saved);
   const albumResponses = new Map();
-  const resolveScript = commands => expandPlaylistScript(commands, {
-    fetchAlbum: async (albumId) => {
-      if (!albumResponses.has(albumId)) {
-        albumResponses.set(albumId, await fetchAlbumDetail(albumId));
-      }
-      return albumResponses.get(albumId);
+  const songItemsById = new Map(items.map(item => [String(item.id), item]));
+  const fetchAlbum = async (albumId) => {
+    if (!albumResponses.has(albumId)) {
+      albumResponses.set(albumId, await fetchAlbumDetail(albumId));
     }
-  });
+    return albumResponses.get(albumId);
+  };
+  const resolveScript = commands => resolvePlaylistCommands(commands, { fetchAlbum });
+  const resolveSongItems = async (ids) => {
+    const missingIds = [...new Set(ids.map(id => String(id)))].filter(id => !songItemsById.has(id));
+    if (missingIds.length) {
+      const response = await fetchSongDetailByIds(missingIds.map(id => ({ id })));
+      if (!response || response.code !== 200) {
+        throw new Error(`获取歌曲详情失败：${JSON.stringify(response)}`);
+      }
+      for (const song of response.songs || []) {
+        const item = toSongItem(song);
+        songItemsById.set(String(item.id), item);
+      }
+    }
+    const missingAfterFetch = ids
+      .map(id => String(id))
+      .filter(id => !songItemsById.has(id));
+    if (missingAfterFetch.length) {
+      throw new Error(`歌曲详情不完整，缺少：${missingAfterFetch.slice(0, 5).join('、')}`);
+    }
+    return ids.map(id => songItemsById.get(String(id)));
+  };
+  const sortSettingsPromise = Promise.all([
+    loadTitleSortConfig(),
+    loadDateSortSettings(),
+    loadArtistSortSettings(),
+    loadHeatSortConfig()
+  ]).then(([title, date, artist, heat]) => ({ title, date, artist, heat }));
+  const resolveCommandWithCache = async (command, plan) => {
+    if (command.type !== 'sort') return resolveCommand(command, { fetchAlbum });
+    if (!plan || !Array.isArray(plan.songIds)) {
+      throw new Error('排序命令缺少当前执行方案');
+    }
+
+    if (command.key === 'random') {
+      return resolveCommand(command, {
+        fetchAlbum,
+        sortConfig: { random: true, randomFn: Math.random }
+      });
+    }
+
+    const sortItems = await resolveSongItems(plan.songIds);
+    const settings = await sortSettingsPromise;
+    const sortConfig = resolveSortConfig(command, settings);
+    if (command.key === 'date'
+      || (command.key === 'artist' && sortConfig.artist.sortSameArtistByDate)) {
+      await ensurePublishTimes(sortItems);
+    }
+    if (command.key === 'heat') {
+      const metricResult = await ensureHeatMetric(sortItems, sortConfig.heat.metric);
+      if (metricResult.failed) {
+        showToast(`${metricResult.failed} 首歌曲的排序指标获取失败，将排在末尾`);
+      }
+    }
+    return resolveCommand(command, { fetchAlbum, sortConfig, sortItems });
+  };
+  const initialScript = await getEditorScript(saved, currentIds, resolveScript);
+  const state = getPlaylistScriptState(currentIds, saved);
 
   const editorResult = await showPlaylistScriptDialog(initialScript, {
     playlistName: playlist.name,
@@ -67,6 +158,8 @@ export async function editPlaylistScript(pid) {
     currentScript: buildPlaylistScript(currentIds),
     currentItems: items,
     resolveScript,
+    resolveCommand: resolveCommandWithCache,
+    resolveSongItems,
     warning: getDriftWarning(state)
   });
   if (!editorResult.isConfirmed) return;
@@ -74,14 +167,7 @@ export async function editPlaylistScript(pid) {
   const scriptText = editorResult.value.scriptText
     .replaceAll('\r\n', '\n')
     .replaceAll('\r', '\n');
-  const commands = parsePlaylistScript(scriptText);
-
-  // 先保留用户刚刚编辑的脚本；应用成功后再更新 appliedSongIds。
-  await savePlaylistScript(pid, {
-    scriptText,
-    appliedSongIds: saved?.appliedSongIds?.length ? saved.appliedSongIds : currentIds,
-    appliedScriptText: saved?.appliedScriptText || initialScript
-  });
+  const commands = parseSongOnlyPlaylistScript(scriptText);
 
   let expanded;
   try {
@@ -92,6 +178,15 @@ export async function editPlaylistScript(pid) {
     return;
   }
 
+  // 只有脚本已经完整解析、专辑也安全展开后，才保存用户这次编辑的草稿。
+  await savePlaylistScript(pid, {
+    scriptText,
+    appliedSongIds: saved && Array.isArray(saved.appliedSongIds) ? saved.appliedSongIds : currentIds,
+    appliedScriptText: saved && typeof saved.appliedScriptText === 'string'
+      ? saved.appliedScriptText
+      : initialScript
+  });
+
   const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
   const previewResult = await showPlaylistScriptPreviewDialog({
     playlistName: playlist.name,
@@ -100,7 +195,6 @@ export async function editPlaylistScript(pid) {
     addedCount: diff.addedIds.length,
     removedCount: diff.removedIds.length,
     changedOrder: diff.changedOrder,
-    albumCount: commands.filter(command => command.type === 'album').length,
     externalChange: state.currentChanged && !sameSongOrder(currentIds, expanded.songIds)
   });
   if (!previewResult.isConfirmed) return;

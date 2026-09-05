@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.9.0
-// @description  网易云音乐网页版歌单管理工具，支持歌单编排脚本、排序、批量移动和批量删除歌曲
+// @version      0.9.1
+// @description  网易云音乐网页版歌单管理工具，支持歌单编排脚本、排序、随机排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
 // @icon         https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/assets/icon.png
@@ -186,11 +186,31 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
     return (playlist?.tracks || []).map((song) => song.id);
   }
+  function assertCompleteSongItems(originalSongIds, items) {
+    const expectedIds = originalSongIds.map((id) => String(id));
+    const actualIds = items.map((item) => String(item.id));
+    const expectedCounts = /* @__PURE__ */ new Map();
+    const actualCounts = /* @__PURE__ */ new Map();
+    for (const id of expectedIds) expectedCounts.set(id, (expectedCounts.get(id) || 0) + 1);
+    for (const id of actualIds) actualCounts.set(id, (actualCounts.get(id) || 0) + 1);
+    const complete = expectedIds.length === actualIds.length && expectedCounts.size === actualCounts.size && [...expectedCounts].every(([id, count]) => actualCounts.get(id) === count);
+    if (complete) return;
+    const missingIds = [...expectedCounts].filter(([id, count]) => (actualCounts.get(id) || 0) < count).map(([id]) => id);
+    throw new Error(
+      `\u6B4C\u5355\u6B4C\u66F2\u8BE6\u60C5\u4E0D\u5B8C\u6574\uFF1A\u5E94\u6709 ${expectedIds.length} \u9996\uFF0C\u5B9E\u9645\u83B7\u53D6 ${actualIds.length} \u9996${missingIds.length ? `\uFF1B\u7F3A\u5C11 ${missingIds.slice(0, 5).join("\u3001")}` : ""}`
+    );
+  }
   async function getAllSongs(pid) {
     const detail = await fetchPlaylistDetail(pid);
     if (!detail || detail.code !== 200) throw new Error("playlist/detail failed: " + JSON.stringify(detail));
     const pl = detail.playlist;
     const originalSongIds = getPlaylistTrackIds(pl);
+    const trackCount = Number(pl.trackCount);
+    if (Number.isFinite(trackCount) && trackCount > originalSongIds.length) {
+      throw new Error(
+        `\u6B4C\u5355\u6B4C\u66F2\u7D22\u5F15\u4E0D\u5B8C\u6574\uFF1A\u5E94\u6709 ${trackCount} \u9996\uFF0C\u5B9E\u9645\u83B7\u53D6 ${originalSongIds.length} \u9996`
+      );
+    }
     const originalIndexById = new Map(
       originalSongIds.map((id, index) => [String(id), index])
     );
@@ -212,6 +232,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         items.push(toSongItem(song, originalIndexById.get(String(song.id)) ?? index));
       }
     }
+    assertCompleteSongItems(originalSongIds, items);
     return {
       playlist: pl,
       items: stableSort(items, (a, b) => a.originalIndex - b.originalIndex),
@@ -1044,11 +1065,12 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
 
     .ncm-sort-script-live-preview {
-      min-height: min(58vh, 520px);
-      max-height: min(58vh, 520px);
+      --ncm-sort-script-viewport-height: min(58vh, 520px);
+      min-height: var(--ncm-sort-script-viewport-height);
+      max-height: var(--ncm-sort-script-viewport-height);
       box-sizing: border-box;
       overflow-y: auto;
-      padding: 10px;
+      padding: 0 10px;
       border: 1px solid #e0e6e8;
       border-radius: 8px;
       background: #fbfcfc;
@@ -1131,10 +1153,25 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       list-style: none;
     }
 
+    .ncm-sort-script-preview-list::before,
+    .ncm-sort-script-preview-list::after {
+      display: block;
+      height: calc((min(58vh, 520px) - 32px) / 2);
+      content: '';
+    }
+
     .ncm-sort-script-preview-group {
       margin: 0;
       padding: 0;
       list-style: none;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .ncm-sort-script-preview-group.is-selected > .ncm-sort-script-preview-row {
+      border-color: #347b73;
+      background: #e6f3f0;
+      box-shadow: 0 0 0 2px rgba(52, 123, 115, 0.2);
     }
 
     .ncm-sort-script-track-list {
@@ -1217,11 +1254,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       background: #f1f8f7;
     }
 
-    .ncm-sort-script-preview-group.is-active > .ncm-sort-script-preview-row {
-      border-color: #5c9a93;
-      box-shadow: 0 0 0 2px rgba(92, 154, 147, 0.16);
-    }
-
     .ncm-sort-script-preview-marker {
       width: 12px;
       flex: 0 0 12px;
@@ -1301,14 +1333,15 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     }
 
     .ncm-sort-script-textarea {
+      --ncm-sort-script-viewport-height: min(58vh, 520px);
       display: block;
       width: 100%;
-      min-height: min(58vh, 520px);
-      max-height: min(58vh, 520px);
+      min-height: var(--ncm-sort-script-viewport-height);
+      max-height: var(--ncm-sort-script-viewport-height);
       box-sizing: border-box;
       resize: vertical;
       overflow-y: auto;
-      padding: 10px 14px;
+      padding: calc((var(--ncm-sort-script-viewport-height) - 21.45px) / 2) 14px;
       border: 1px solid #d5dddf;
       border-radius: 8px;
       outline: none;
@@ -1329,6 +1362,64 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 9px;
+    }
+
+    .ncm-sort-script-command-line {
+      margin-top: 12px;
+      padding: 10px 12px 11px;
+      border: 1px solid #dfe8e6;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #f7fbfa, #f1f8f6);
+      text-align: left;
+    }
+
+    .ncm-sort-script-command-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ncm-sort-script-command-input-row::before {
+      color: #5c9a93;
+      content: '\u203A';
+      font: 700 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input {
+      min-width: 0;
+      flex: 1 1 auto;
+      height: 32px;
+      box-sizing: border-box;
+      padding: 0 10px;
+      border: 1px solid #d5dddf;
+      border-radius: 6px;
+      outline: none;
+      background: #fff;
+      color: #263238;
+      font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input:focus {
+      border-color: #5c9a93;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button {
+      width: 34px;
+      min-height: 34px;
+      padding: 0 !important;
+      border-color: #5c9a93;
+      background: #5c9a93;
+      color: #fff;
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button:hover {
+      border-color: #347b73;
+      background: #347b73;
+      color: #fff;
     }
 
     .ncm-sort-script-tool-button {
@@ -1725,21 +1816,143 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     return stableSort(items, cmpByHeat(config));
   }
 
-  // src/data/playlist-script.js
+  // src/data/playlist-script-protocol.js
   var PLAYLIST_SCRIPT_VERSION = 1;
-  function normalizeId(value) {
+  function normalizePlaylistId(value) {
     const id = String(value ?? "").trim();
     return /^[1-9]\d*$/.test(id) ? id : null;
   }
-  function createScriptError(message, line = null) {
+  function createPlaylistScriptError(message, line = null) {
     const error = new Error(line ? `\u7B2C ${line} \u884C\uFF1A${message}` : message);
     error.name = "PlaylistScriptError";
     error.line = line;
     return error;
   }
-  function parsePlaylistScript(text) {
+  function parsePosition(value) {
+    if (value === void 0) return null;
+    if (!/^\d+$/.test(value)) {
+      throw createPlaylistScriptError("position \u5FC5\u987B\u662F\u975E\u8D1F\u6574\u6570");
+    }
+    const position = Number(value);
+    if (!Number.isSafeInteger(position)) {
+      throw createPlaylistScriptError("position \u8D85\u51FA\u5B89\u5168\u6574\u6570\u8303\u56F4");
+    }
+    return position;
+  }
+  function parseSongPosition(value, label = "\u4F4D\u7F6E") {
+    if (!/^\d+$/.test(value)) {
+      throw createPlaylistScriptError(`${label}\u5FC5\u987B\u662F\u6B63\u6574\u6570`);
+    }
+    const position = Number(value);
+    if (!Number.isSafeInteger(position) || position < 1) {
+      throw createPlaylistScriptError(`${label}\u5FC5\u987B\u662F\u6B63\u6574\u6570`);
+    }
+    return position;
+  }
+  function isUnsignedIntegerToken(value) {
+    return /^\d+$/.test(value) && Number.isSafeInteger(Number(value));
+  }
+  function parseSortCommand(tokens) {
+    if (!tokens.length) {
+      throw createPlaylistScriptError("sort \u540E\u9700\u8981\u6307\u5B9A title\u3001date\u3001artist \u6216 heat");
+    }
+    let end = null;
+    let start = null;
+    if (tokens.length >= 3 && isUnsignedIntegerToken(tokens[tokens.length - 1]) && isUnsignedIntegerToken(tokens[tokens.length - 2])) {
+      start = parseSongPosition(tokens[tokens.length - 2], "\u6392\u5E8F\u8D77\u59CB\u4F4D\u7F6E");
+      end = parseSongPosition(tokens[tokens.length - 1], "\u6392\u5E8F\u7ED3\u675F\u4F4D\u7F6E");
+      tokens = tokens.slice(0, -2);
+    }
+    const key = tokens.shift().toLowerCase();
+    const options = {};
+    const seen = /* @__PURE__ */ new Set();
+    const addOption = (name, value) => {
+      if (seen.has(name)) throw createPlaylistScriptError(`sort \u53C2\u6570\u91CD\u590D\uFF1A${name}`);
+      seen.add(name);
+      options[name] = value;
+    };
+    if (!["title", "date", "artist", "heat", "random"].includes(key)) {
+      throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684\u6392\u5E8F\u7C7B\u578B\uFF1A${key}`);
+    }
+    if (key === "random" && tokens.length) {
+      throw createPlaylistScriptError(`random \u4E0D\u652F\u6301\u53C2\u6570\uFF1A${tokens[0]}`);
+    }
+    if (key === "heat") {
+      const metric = tokens.shift()?.toLowerCase();
+      const metricAliases = {
+        popularity: "popularity",
+        red: "redCount",
+        redcount: "redCount",
+        comments: "commentCount",
+        comment: "commentCount",
+        commentcount: "commentCount"
+      };
+      if (!metricAliases[metric]) {
+        throw createPlaylistScriptError("heat \u5FC5\u987B\u6307\u5B9A popularity\u3001red \u6216 comments");
+      }
+      addOption("metric", metricAliases[metric]);
+    }
+    for (const rawOption of tokens) {
+      const option = rawOption.toLowerCase();
+      if (key === "title") {
+        throw createPlaylistScriptError(`title \u4E0D\u652F\u6301\u53C2\u6570\uFF1A${rawOption}`);
+      }
+      if (option === "asc" || option === "desc") {
+        addOption("descending", option === "desc");
+        continue;
+      }
+      if (key === "date" || key === "artist") {
+        if (option === "album" || option === "noalbum") {
+          addOption("sortAlbumsByName", option === "album");
+          continue;
+        }
+        if (option === "track" || option === "notrack") {
+          addOption("sortAlbumTracks", option === "track");
+          continue;
+        }
+      }
+      if (key === "artist") {
+        if (option === "name" || option === "original") {
+          addOption("sortArtistsByName", option === "name");
+          continue;
+        }
+        if (option === "date" || option === "nodate") {
+          addOption("sortSameArtistByDate", option === "date");
+          continue;
+        }
+      }
+      if (key === "heat" && (option === "asc" || option === "desc")) continue;
+      throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684 sort \u53C2\u6570\uFF1A${rawOption}`);
+    }
+    if (key === "heat" && !Object.hasOwn(options, "metric")) {
+      throw createPlaylistScriptError("heat \u5FC5\u987B\u6307\u5B9A\u6392\u5E8F\u6307\u6807");
+    }
+    if (options.sortAlbumTracks === true && options.sortAlbumsByName === false) {
+      throw createPlaylistScriptError("track \u9700\u8981\u5148\u542F\u7528 album");
+    }
+    return {
+      type: "sort",
+      key,
+      options,
+      start,
+      end,
+      line: 1
+    };
+  }
+  function validateCommandPosition(command, currentCount) {
+    if (command.position === null || command.position === void 0) return;
+    if (!Number.isInteger(currentCount) || currentCount < 0) {
+      throw createPlaylistScriptError("\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D\u6B4C\u5355\u6B4C\u66F2\u6570\u91CF");
+    }
+    if (command.position > currentCount) {
+      throw createPlaylistScriptError(
+        `position ${command.position} \u8D85\u51FA\u5F53\u524D\u6B4C\u5355\u8303\u56F4\uFF080-${currentCount}\uFF09`
+      );
+    }
+  }
+  function parsePlaylistScript(text, { allowEmpty = false } = {}) {
     if (typeof text !== "string") {
-      throw createScriptError("\u811A\u672C\u5185\u5BB9\u5FC5\u987B\u662F\u6587\u672C");
+      throw createPlaylistScriptError("\u811A\u672C\u5185\u5BB9\u5FC5\u987B\u662F\u6587\u672C");
     }
     const commands = [];
     const lines = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n").split("\n");
@@ -1750,36 +1963,120 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       if (line.startsWith("#")) {
         const header = line.match(/^#\s*ncm-playlist\s*:\s*(\d+)$/i);
         if (header && Number(header[1]) !== PLAYLIST_SCRIPT_VERSION) {
-          throw createScriptError(`\u4E0D\u652F\u6301\u7684\u811A\u672C\u7248\u672C\uFF1A${header[1]}`, lineNumber);
+          throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684\u811A\u672C\u7248\u672C\uFF1A${header[1]}`, lineNumber);
         }
         return;
       }
       const match = line.match(/^(song|album)\s+(\S+)$/i);
       if (!match) {
-        throw createScriptError("\u53EA\u652F\u6301 song <\u6B4C\u66F2ID> \u6216 album <\u4E13\u8F91ID>", lineNumber);
+        throw createPlaylistScriptError("\u53EA\u652F\u6301 song <\u6B4C\u66F2ID> \u6216 album <\u4E13\u8F91ID>", lineNumber);
       }
-      const id = normalizeId(match[2]);
+      const id = normalizePlaylistId(match[2]);
       if (!id) {
-        throw createScriptError("ID \u5FC5\u987B\u662F\u6B63\u6574\u6570", lineNumber);
+        throw createPlaylistScriptError("ID \u5FC5\u987B\u662F\u6B63\u6574\u6570", lineNumber);
       }
       commands.push({ type: match[1].toLowerCase(), id, line: lineNumber });
     });
-    if (!commands.length) {
-      throw createScriptError("\u811A\u672C\u81F3\u5C11\u9700\u8981\u5305\u542B\u4E00\u6761 song \u6216 album \u547D\u4EE4");
+    if (!commands.length && !allowEmpty) {
+      throw createPlaylistScriptError("\u811A\u672C\u81F3\u5C11\u9700\u8981\u5305\u542B\u4E00\u6761 song \u6216 album \u547D\u4EE4");
     }
     return commands;
   }
-  function buildPlaylistScript(songIds) {
-    if (!Array.isArray(songIds) || !songIds.length) {
-      throw createScriptError("\u65E0\u6CD5\u4E3A\u6CA1\u6709\u6B4C\u66F2\u7684\u6B4C\u5355\u751F\u6210\u811A\u672C");
+  function parseScriptDocument(text) {
+    const commands = parsePlaylistScript(text, { allowEmpty: true });
+    const albumCommand = commands.find((command) => command.type === "album");
+    if (albumCommand) {
+      throw createPlaylistScriptError("\u811A\u672C\u6587\u672C\u53EA\u652F\u6301 song <\u6B4C\u66F2ID>", albumCommand.line);
     }
-    const lines = songIds.map((id) => {
-      const normalizedId = normalizeId(id);
-      if (!normalizedId) throw createScriptError(`\u65E0\u6548\u6B4C\u66F2 ID\uFF1A${id}`);
-      return `song ${normalizedId}`;
-    });
-    return lines.join("\n");
+    return commands;
   }
+  function parseSongOnlyPlaylistScript(text) {
+    return parseScriptDocument(text);
+  }
+  function parseCommandLine(text) {
+    if (typeof text !== "string" || !text.trim()) {
+      throw createPlaylistScriptError("\u8BF7\u8F93\u5165\u547D\u4EE4");
+    }
+    const normalizedText = text.replaceAll("\r\n", "\n").replaceAll("\r", "\n").trim();
+    if (normalizedText.includes("\n")) {
+      throw createPlaylistScriptError("\u547D\u4EE4\u884C\u4E00\u6B21\u53EA\u80FD\u8F93\u5165\u4E00\u6761\u547D\u4EE4");
+    }
+    if (/^clear$/i.test(normalizedText)) {
+      return { type: "clear", line: 1 };
+    }
+    const tokens = normalizedText.split(/\s+/);
+    const verb = tokens.shift().toLowerCase();
+    if (verb === "song" || verb === "album") {
+      if (tokens.length < 1 || tokens.length > 2) {
+        throw createPlaylistScriptError("\u53EA\u652F\u6301 song ID [position] \u6216 album ID [position]");
+      }
+      const id = normalizePlaylistId(tokens[0]);
+      if (!id) {
+        throw createPlaylistScriptError("ID \u5FC5\u987B\u662F\u6B63\u6574\u6570");
+      }
+      const command = { type: verb, id, line: 1 };
+      if (tokens[1] !== void 0) command.position = parsePosition(tokens[1]);
+      return command;
+    }
+    if (verb === "remove") {
+      if (tokens.length < 1 || tokens.length > 2) {
+        throw createPlaylistScriptError("remove \u9700\u8981 start [end]");
+      }
+      const start = parseSongPosition(tokens[0], "\u8D77\u59CB\u4F4D\u7F6E");
+      const end = tokens[1] === void 0 ? start : parseSongPosition(tokens[1], "\u7ED3\u675F\u4F4D\u7F6E");
+      return { type: "remove", start, end, line: 1 };
+    }
+    if (verb === "move") {
+      if (tokens.length !== 3) throw createPlaylistScriptError("move \u9700\u8981 start end target");
+      return {
+        type: "move",
+        start: parseSongPosition(tokens[0], "\u8D77\u59CB\u4F4D\u7F6E"),
+        end: parseSongPosition(tokens[1], "\u7ED3\u675F\u4F4D\u7F6E"),
+        target: parsePosition(tokens[2]),
+        line: 1
+      };
+    }
+    if (verb === "swap") {
+      if (tokens.length !== 2) throw createPlaylistScriptError("swap \u9700\u8981\u4E24\u4E2A\u6B4C\u66F2\u4F4D\u7F6E");
+      return {
+        type: "swap",
+        positionA: parseSongPosition(tokens[0], "\u6B4C\u66F2\u4F4D\u7F6E"),
+        positionB: parseSongPosition(tokens[1], "\u6B4C\u66F2\u4F4D\u7F6E"),
+        line: 1
+      };
+    }
+    if (verb === "sort") return parseSortCommand(tokens);
+    throw createPlaylistScriptError(
+      "\u652F\u6301 song ID [position]\u3001album ID [position]\u3001clear\u3001remove\u3001move\u3001swap \u6216 sort"
+    );
+  }
+  function buildSongScript(songIds) {
+    if (!Array.isArray(songIds)) {
+      throw createPlaylistScriptError("\u6B4C\u66F2 ID \u5217\u8868\u5FC5\u987B\u662F\u6570\u7EC4");
+    }
+    return songIds.map((id) => {
+      const normalizedId = normalizePlaylistId(id);
+      if (!normalizedId) throw createPlaylistScriptError(`\u65E0\u6548\u6B4C\u66F2 ID\uFF1A${id}`);
+      return `song ${normalizedId}`;
+    }).join("\n");
+  }
+  function buildPlaylistScript(songIds) {
+    return buildSongScript(songIds);
+  }
+
+  // src/sort/random.js
+  function shuffleItems(items, random = Math.random) {
+    const result = [...items];
+    for (let index = result.length - 1; index > 0; index -= 1) {
+      const value = Number(random());
+      const normalized = Number.isFinite(value) ? Math.min(Math.max(value, 0), 0.9999999999999999) : 0;
+      const swapIndex = Math.floor(normalized * (index + 1));
+      [result[index], result[swapIndex]] = [result[swapIndex], result[index]];
+    }
+    return result;
+  }
+
+  // src/data/playlist-plan.js
   function getAlbumSongs(response) {
     if (!response || response.code !== 200) return null;
     const nestedSongs = response.album?.songs;
@@ -1787,60 +2084,350 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     if (Array.isArray(response.songs) && response.songs.length) return response.songs;
     return Array.isArray(nestedSongs) ? nestedSongs : null;
   }
-  async function expandPlaylistScript(commands, {
-    fetchAlbum = fetchAlbumDetail
+  function createSongBlock(id, line = null, item = { id }) {
+    return {
+      type: "song",
+      id,
+      line,
+      position: null,
+      songIds: [id],
+      items: [item]
+    };
+  }
+  function normalizeSongIds(songIds) {
+    if (!Array.isArray(songIds)) {
+      throw createPlaylistScriptError("\u6B4C\u66F2 ID \u5217\u8868\u5FC5\u987B\u662F\u6570\u7EC4");
+    }
+    return songIds.map((id) => {
+      const normalizedId = normalizePlaylistId(id);
+      if (!normalizedId) throw createPlaylistScriptError(`\u65E0\u6548\u6B4C\u66F2 ID\uFF1A${id}`);
+      return normalizedId;
+    });
+  }
+  function assertUniqueSongIds(songIds) {
+    const seenIds = /* @__PURE__ */ new Set();
+    const duplicateIds = /* @__PURE__ */ new Set();
+    for (const id of songIds) {
+      const normalizedId = String(id);
+      if (seenIds.has(normalizedId)) duplicateIds.add(normalizedId);
+      seenIds.add(normalizedId);
+    }
+    if (duplicateIds.size) {
+      throw createPlaylistScriptError(`\u6267\u884C\u65B9\u6848\u4E2D\u5B58\u5728\u91CD\u590D\u6B4C\u66F2\uFF1A${[...duplicateIds].join("\u3001")}`);
+    }
+  }
+  function createSongPlan(songIds, items = []) {
+    const ids = normalizeSongIds(songIds);
+    assertUniqueSongIds(ids);
+    const itemMap = new Map(items.map((item) => [String(item.id), item]));
+    const planItems = ids.map((id) => itemMap.get(id) || { id });
+    return {
+      songIds: ids,
+      blocks: ids.map((id, index) => createSongBlock(id, index + 1, planItems[index])),
+      items: planItems
+    };
+  }
+  function insertSongIds(songIds, insertedIds, position) {
+    const currentIds = normalizeSongIds(songIds);
+    const idsToInsert = normalizeSongIds(insertedIds);
+    if (!Number.isInteger(position) || position < 0 || position > currentIds.length) {
+      throw createPlaylistScriptError(`\u63D2\u5165\u4F4D\u7F6E\u8D85\u51FA\u5F53\u524D\u6B4C\u5355\u8303\u56F4\uFF080-${currentIds.length}\uFF09`);
+    }
+    return [
+      ...currentIds.slice(0, position),
+      ...idsToInsert,
+      ...currentIds.slice(position)
+    ];
+  }
+  function validateSongRange(start, end, currentCount, label = "\u4F4D\u7F6E") {
+    if (!Number.isInteger(currentCount) || currentCount < 0) {
+      throw createPlaylistScriptError(`\u65E0\u6CD5\u786E\u8BA4\u5F53\u524D\u6B4C\u5355\u6B4C\u66F2\u6570\u91CF`);
+    }
+    if (!Number.isInteger(start) || !Number.isInteger(end) || start < 1 || end < 1) {
+      throw createPlaylistScriptError(`${label}\u5FC5\u987B\u662F\u6B63\u6574\u6570`);
+    }
+    if (start > end) {
+      throw createPlaylistScriptError("\u8D77\u59CB\u4F4D\u7F6E\u4E0D\u80FD\u5927\u4E8E\u7ED3\u675F\u4F4D\u7F6E");
+    }
+    if (end > currentCount) {
+      throw createPlaylistScriptError(
+        `${label}\u8D85\u51FA\u5F53\u524D\u6B4C\u5355\u8303\u56F4\uFF081-${currentCount}\uFF09`
+      );
+    }
+  }
+  function removeSongRange(songIds, start, end = start) {
+    const ids = normalizeSongIds(songIds);
+    validateSongRange(start, end, ids.length);
+    return [...ids.slice(0, start - 1), ...ids.slice(end)];
+  }
+  function moveSongRange(songIds, start, end, target) {
+    const ids = normalizeSongIds(songIds);
+    validateSongRange(start, end, ids.length);
+    if (!Number.isInteger(target) || target < 0 || target > ids.length) {
+      throw createPlaylistScriptError(`\u76EE\u6807\u4F4D\u7F6E\u8D85\u51FA\u5F53\u524D\u6B4C\u5355\u8303\u56F4\uFF080-${ids.length}\uFF09`);
+    }
+    const sourceStart = start - 1;
+    const sourceEnd = end;
+    if (target > sourceStart && target < sourceEnd) {
+      throw createPlaylistScriptError("\u76EE\u6807\u4F4D\u7F6E\u4E0D\u80FD\u4F4D\u4E8E\u79FB\u52A8\u533A\u95F4\u5185\u90E8");
+    }
+    const movedIds = ids.slice(sourceStart, sourceEnd);
+    const remainingIds = [...ids.slice(0, sourceStart), ...ids.slice(sourceEnd)];
+    const insertAt = target <= sourceStart ? target : target - movedIds.length;
+    return [
+      ...remainingIds.slice(0, insertAt),
+      ...movedIds,
+      ...remainingIds.slice(insertAt)
+    ];
+  }
+  function swapSongPositions(songIds, positionA, positionB) {
+    const ids = normalizeSongIds(songIds);
+    validateSongRange(positionA, positionA, ids.length, "\u6B4C\u66F2\u4F4D\u7F6E");
+    validateSongRange(positionB, positionB, ids.length, "\u6B4C\u66F2\u4F4D\u7F6E");
+    const nextIds = [...ids];
+    const indexA = positionA - 1;
+    const indexB = positionB - 1;
+    [nextIds[indexA], nextIds[indexB]] = [nextIds[indexB], nextIds[indexA]];
+    return nextIds;
+  }
+  function resolveSelectionAfterTransform(nextIds, selectedSongId = null, fallbackIndex = null) {
+    if (selectedSongId != null) {
+      const selectedIndex = nextIds.indexOf(String(selectedSongId));
+      if (selectedIndex >= 0) return selectedIndex;
+    }
+    if (fallbackIndex == null || !nextIds.length) return null;
+    return Math.min(Math.max(fallbackIndex, 0), nextIds.length - 1);
+  }
+  function mergeDateSortConfig(settings = {}, options = {}) {
+    const base = {
+      descending: settings.descending !== false,
+      ...DEFAULT_DATE_SORT_CONFIG,
+      ...normalizeDateSortConfig(settings)
+    };
+    return {
+      ...base,
+      ...Object.hasOwn(options, "descending") ? { descending: options.descending } : {},
+      ...Object.hasOwn(options, "sortAlbumsByName") ? { sortAlbumsByName: options.sortAlbumsByName } : {},
+      ...Object.hasOwn(options, "sortAlbumTracks") ? { sortAlbumTracks: options.sortAlbumTracks } : {}
+    };
+  }
+  function resolveSortConfig(command, settings = {}) {
+    const options = command?.options || {};
+    const title = normalizeTitleSortConfig(settings.title);
+    const date = mergeDateSortConfig(settings.date, options);
+    if (command?.key === "title") return { title };
+    if (command?.key === "date") return { date };
+    if (command?.key === "artist") {
+      const artist = {
+        ...normalizeArtistSortConfig(settings.artist),
+        ...Object.hasOwn(options, "sortArtistsByName") ? { sortArtistsByName: options.sortArtistsByName } : {},
+        ...Object.hasOwn(options, "sortSameArtistByDate") ? { sortSameArtistByDate: options.sortSameArtistByDate } : {}
+      };
+      return { title, date, artist };
+    }
+    if (command?.key === "heat") {
+      return {
+        heat: {
+          ...normalizeHeatSortConfig(settings.heat),
+          ...Object.hasOwn(options, "metric") ? { metric: options.metric } : {},
+          ...Object.hasOwn(options, "descending") ? { descending: options.descending } : {}
+        }
+      };
+    }
+    if (command?.key === "random") return { random: true };
+    throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684\u6392\u5E8F\u7C7B\u578B\uFF1A${command?.key}`);
+  }
+  function sortSongRange(plan, command, sortConfig) {
+    const count = plan.songIds.length;
+    if (count === 0 && command.start == null && command.end == null) {
+      return createSongPlan([]);
+    }
+    const start = command.start ?? 1;
+    const end = command.end ?? count;
+    validateSongRange(start, end, count, "\u6392\u5E8F\u4F4D\u7F6E");
+    if (!sortConfig || !sortConfig[command.key]) {
+      throw createPlaylistScriptError("\u6392\u5E8F\u914D\u7F6E\u65E0\u6548");
+    }
+    const selectedItems = plan.items.slice(start - 1, end);
+    let orderedItems;
+    if (command.key === "title") {
+      orderedItems = stableSort(selectedItems, createTitleComparator(sortConfig.title));
+    } else if (command.key === "date") {
+      orderedItems = stableSort(
+        selectedItems,
+        cmpByDate(sortConfig.date.descending, sortConfig.date)
+      );
+    } else if (command.key === "artist") {
+      orderedItems = sortSongsByArtist(
+        selectedItems,
+        sortConfig.artist,
+        sortConfig.title,
+        sortConfig.date
+      );
+    } else if (command.key === "heat") {
+      orderedItems = sortSongsByHeat(selectedItems, sortConfig.heat);
+    } else if (command.key === "random") {
+      orderedItems = shuffleItems(selectedItems, sortConfig.randomFn);
+    } else {
+      throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684\u6392\u5E8F\u7C7B\u578B\uFF1A${command.key}`);
+    }
+    const nextItems = [
+      ...plan.items.slice(0, start - 1),
+      ...orderedItems,
+      ...plan.items.slice(end)
+    ];
+    return createSongPlan(nextItems.map((item) => item.id), nextItems);
+  }
+  async function resolveCommand(command, { fetchAlbum, sortConfig, sortItems } = {}) {
+    if (!command || typeof command !== "object") {
+      throw createPlaylistScriptError("\u547D\u4EE4\u5FC5\u987B\u662F\u5BF9\u8C61");
+    }
+    if (command.type === "clear") {
+      return { type: "clear", command };
+    }
+    if (["remove", "move", "swap"].includes(command.type)) {
+      return { type: command.type, command };
+    }
+    if (command.type === "sort") {
+      const resolvedSortConfig = command.key === "random" ? { random: true, randomFn: sortConfig?.randomFn || Math.random } : sortConfig;
+      if (!resolvedSortConfig) throw createPlaylistScriptError("\u6392\u5E8F\u914D\u7F6E\u65E0\u6548", command.line);
+      return { type: "sort", command, sortConfig: resolvedSortConfig, items: sortItems };
+    }
+    const id = normalizePlaylistId(command.id);
+    if (!id) throw createPlaylistScriptError("ID \u5FC5\u987B\u662F\u6B63\u6574\u6570", command.line);
+    if (command.type === "song") {
+      const item = { id };
+      return {
+        type: "insert",
+        command: { ...command, id },
+        songIds: [id],
+        items: [item],
+        blocks: [createSongBlock(id, command.line, item)]
+      };
+    }
+    if (command.type !== "album") {
+      throw createPlaylistScriptError(`\u4E0D\u652F\u6301\u7684\u6267\u884C\u547D\u4EE4\uFF1A${command.type}`, command.line);
+    }
+    if (typeof fetchAlbum !== "function") {
+      throw createPlaylistScriptError(`\u65E0\u6CD5\u8BFB\u53D6\u4E13\u8F91 ${id}`, command.line);
+    }
+    let response;
+    try {
+      response = await fetchAlbum(id);
+    } catch (error) {
+      throw createPlaylistScriptError(`\u83B7\u53D6\u4E13\u8F91 ${id} \u5931\u8D25\uFF1A${error?.message || String(error)}`, command.line);
+    }
+    const songs = getAlbumSongs(response);
+    if (!songs) {
+      throw createPlaylistScriptError(`\u65E0\u6CD5\u83B7\u53D6\u4E13\u8F91 ${id} \u7684\u66F2\u76EE`, command.line);
+    }
+    if (!songs.length) {
+      throw createPlaylistScriptError(`\u4E13\u8F91 ${id} \u6CA1\u6709\u53EF\u7528\u6B4C\u66F2`, command.line);
+    }
+    const songIds = songs.map((song) => normalizePlaylistId(song?.id));
+    if (songIds.some((songId) => !songId)) {
+      throw createPlaylistScriptError(`\u4E13\u8F91 ${id} \u7684\u66F2\u76EE\u6570\u636E\u4E0D\u5B8C\u6574\uFF0C\u65E0\u6CD5\u5B89\u5168\u5C55\u5F00`, command.line);
+    }
+    const items = songs.map((song) => toSongItem(song));
+    return {
+      type: "insert",
+      command: { ...command, id },
+      songIds,
+      items,
+      blocks: [{
+        ...command,
+        id,
+        songIds,
+        items,
+        albumName: response.album?.name || "",
+        albumArtist: response.album?.artist?.name || response.album?.artists?.map((artist) => artist.name).join("/") || ""
+      }]
+    };
+  }
+  function applyCommand(plan, resolvedCommand, {
+    position = null,
+    selectedIndex = null,
+    selectedSongId = null
   } = {}) {
-    if (!Array.isArray(commands) || !commands.length) {
-      throw createScriptError("\u6CA1\u6709\u53EF\u6267\u884C\u7684\u811A\u672C\u547D\u4EE4");
+    if (!plan || !Array.isArray(plan.songIds)) {
+      throw createPlaylistScriptError("\u6267\u884C\u65B9\u6848\u65E0\u6548");
+    }
+    if (!resolvedCommand || typeof resolvedCommand !== "object") {
+      throw createPlaylistScriptError("\u5DF2\u89E3\u6790\u547D\u4EE4\u65E0\u6548");
+    }
+    if (resolvedCommand.type === "clear") return { ...createSongPlan([]), selectedIndex: null };
+    const currentSelectedId = selectedSongId == null && Number.isInteger(selectedIndex) && selectedIndex >= 0 ? plan.songIds[selectedIndex] : selectedSongId == null ? null : String(selectedSongId);
+    const findSelectedIndex = (nextIds2, fallbackIndex = null) => resolveSelectionAfterTransform(
+      nextIds2,
+      currentSelectedId,
+      fallbackIndex
+    );
+    if (resolvedCommand.type === "remove") {
+      const { start, end } = resolvedCommand.command;
+      const nextIds2 = removeSongRange(plan.songIds, start, end);
+      const nextPlan2 = createSongPlan(nextIds2, plan.items.filter((_, index) => index < start - 1 || index >= end));
+      return { ...nextPlan2, selectedIndex: findSelectedIndex(nextIds2, start - 1) };
+    }
+    if (resolvedCommand.type === "move") {
+      const { start, end, target } = resolvedCommand.command;
+      const movedId = plan.songIds[start - 1];
+      const nextIds2 = moveSongRange(plan.songIds, start, end, target);
+      const itemMap = new Map(plan.items.map((item) => [String(item.id), item]));
+      const nextPlan2 = createSongPlan(nextIds2, nextIds2.map((id) => itemMap.get(String(id)) || { id }));
+      return { ...nextPlan2, selectedIndex: nextIds2.indexOf(String(movedId)) };
+    }
+    if (resolvedCommand.type === "swap") {
+      const { positionA, positionB } = resolvedCommand.command;
+      const nextIds2 = swapSongPositions(plan.songIds, positionA, positionB);
+      const itemMap = new Map(plan.items.map((item) => [String(item.id), item]));
+      const nextPlan2 = createSongPlan(nextIds2, nextIds2.map((id) => itemMap.get(String(id)) || { id }));
+      return { ...nextPlan2, selectedIndex: findSelectedIndex(nextIds2) };
+    }
+    if (resolvedCommand.type === "sort") {
+      const sortPlan = resolvedCommand.items ? createSongPlan(plan.songIds, resolvedCommand.items) : plan;
+      const nextPlan2 = sortSongRange(sortPlan, resolvedCommand.command, resolvedCommand.sortConfig);
+      return { ...nextPlan2, selectedIndex: findSelectedIndex(nextPlan2.songIds) };
+    }
+    if (resolvedCommand.type !== "insert") {
+      throw createPlaylistScriptError("\u5DF2\u89E3\u6790\u547D\u4EE4\u4E0D\u662F\u53EF\u6267\u884C\u547D\u4EE4");
+    }
+    const insertAt = position ?? (Number.isInteger(selectedIndex) && selectedIndex >= 0 ? selectedIndex + 1 : plan.songIds.length);
+    validateCommandPosition({ position: insertAt }, plan.songIds.length);
+    const nextIds = insertSongIds(plan.songIds, resolvedCommand.songIds, insertAt);
+    assertUniqueSongIds(nextIds);
+    const existingItems = new Map((plan.items || []).map((item) => [String(item.id), item]));
+    const insertedItems = new Map((resolvedCommand.items || []).map((item) => [String(item.id), item]));
+    const items = nextIds.map((id) => insertedItems.get(id) || existingItems.get(id) || { id });
+    const nextPlan = createSongPlan(nextIds, items);
+    return {
+      ...nextPlan,
+      insertedRange: {
+        start: insertAt,
+        end: insertAt + resolvedCommand.songIds.length - 1
+      },
+      selectedIndex: insertAt + resolvedCommand.songIds.length - 1
+    };
+  }
+  async function resolvePlaylistCommands(commands, { fetchAlbum } = {}) {
+    if (!Array.isArray(commands)) {
+      throw createPlaylistScriptError("\u547D\u4EE4\u5217\u8868\u5FC5\u987B\u662F\u6570\u7EC4");
     }
     const songIds = [];
     const blocks = [];
     const items = [];
-    const albumCache = /* @__PURE__ */ new Map();
     for (const command of commands) {
-      if (command.type === "song") {
-        songIds.push(command.id);
-        const songItem = { id: command.id };
-        blocks.push({ ...command, songIds: [command.id], items: [songItem] });
-        items.push(songItem);
+      const resolved = await resolveCommand(command, { fetchAlbum });
+      if (resolved.type === "clear") {
+        songIds.length = 0;
+        blocks.length = 0;
+        items.length = 0;
         continue;
       }
-      let response = albumCache.get(command.id);
-      if (!response) {
-        try {
-          response = await fetchAlbum(command.id);
-          albumCache.set(command.id, response);
-        } catch (error) {
-          throw createScriptError(`\u83B7\u53D6\u4E13\u8F91 ${command.id} \u5931\u8D25\uFF1A${error?.message || String(error)}`, command.line);
-        }
-      }
-      const songs = getAlbumSongs(response);
-      if (!songs) {
-        throw createScriptError(`\u65E0\u6CD5\u83B7\u53D6\u4E13\u8F91 ${command.id} \u7684\u66F2\u76EE`, command.line);
-      }
-      const albumSongIds = songs.map((song) => normalizeId(song?.id)).filter(Boolean);
-      if (!albumSongIds.length) {
-        throw createScriptError(`\u4E13\u8F91 ${command.id} \u6CA1\u6709\u53EF\u7528\u6B4C\u66F2`, command.line);
-      }
-      songIds.push(...albumSongIds);
-      items.push(...songs.map((song) => toSongItem(song)));
-      blocks.push({
-        ...command,
-        songIds: albumSongIds,
-        items: songs.map((song) => toSongItem(song)),
-        albumName: response.album?.name || "",
-        albumArtist: response.album?.artist?.name || response.album?.artists?.map((a) => a.name).join("/") || ""
-      });
+      songIds.push(...resolved.songIds);
+      blocks.push(...resolved.blocks);
+      items.push(...resolved.items);
     }
-    const seenIds = /* @__PURE__ */ new Set();
-    const duplicateIds = /* @__PURE__ */ new Set();
-    for (const id of songIds) {
-      if (seenIds.has(id)) duplicateIds.add(id);
-      seenIds.add(id);
-    }
-    if (duplicateIds.size) {
-      throw createScriptError(`\u5C55\u5F00\u540E\u5B58\u5728\u91CD\u590D\u6B4C\u66F2\uFF1A${[...duplicateIds].join("\u3001")}`);
-    }
+    assertUniqueSongIds(songIds);
     return { songIds, blocks, items };
   }
   function getPlaylistScriptDiff(currentIds, targetIds) {
@@ -1870,8 +2457,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         conflicted: false
       };
     }
-    const currentChanged = !sameSongOrder(currentSongIds, savedScript.appliedSongIds);
-    const localChanged = savedScript.scriptText !== savedScript.appliedScriptText;
+    const appliedSongIds = Array.isArray(savedScript.appliedSongIds) ? savedScript.appliedSongIds : [];
+    const appliedScriptText = typeof savedScript.appliedScriptText === "string" ? savedScript.appliedScriptText : "";
+    const currentChanged = !sameSongOrder(currentSongIds, appliedSongIds);
+    const localChanged = savedScript.scriptText !== appliedScriptText;
     return {
       hasSavedScript: true,
       currentChanged,
@@ -2507,6 +3096,8 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     currentScript = scriptText,
     currentItems = [],
     resolveScript = null,
+    resolveCommand: resolveCommand2 = null,
+    resolveSongItems = null,
     warning = ""
   } = {}) {
     return Swal.fire({
@@ -2515,20 +3106,17 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       <div class="ncm-sort-script-editor">
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
-          <p class="ncm-sort-help">\u6309\u987A\u5E8F\u5199\u5165 song &lt;\u6B4C\u66F2ID&gt; \u6216 album &lt;\u4E13\u8F91ID&gt;\uFF0C\u4E13\u8F91\u4F1A\u6309\u66F2\u76EE\u987A\u5E8F\u5C55\u5F00\u3002</p>
           <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${currentCount} \u9996\u6B4C\u66F2</p>
           ${warning ? `<p class="ncm-sort-script-warning">${escapeHtml(warning)}</p>` : ""}
         </div>
         <div id="playlist-script-live-summary" class="ncm-sort-script-live-summary"></div>
         <div class="ncm-sort-script-columns">
           <div class="ncm-sort-script-preview-panel">
-            <div class="ncm-sort-script-panel-title">\u5B9E\u65F6\u9884\u89C8</div>
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-live-preview" class="ncm-sort-script-live-preview"></div>
             </div>
           </div>
           <div class="ncm-sort-script-command-panel">
-            <div class="ncm-sort-script-panel-title">\u7F16\u6392\u547D\u4EE4</div>
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
               <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
@@ -2539,7 +3127,13 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             </div>
           </div>
         </div>
-        <p class="ncm-sort-script-help">\u811A\u672C\u662F\u5B8C\u6574\u6B4C\u5355\u58F0\u660E\u3002\u5E94\u7528\u540E\uFF0C\u5F53\u524D\u6B4C\u5355\u4E2D\u672A\u51FA\u73B0\u5728\u811A\u672C\u91CC\u7684\u6B4C\u66F2\u4F1A\u88AB\u79FB\u9664\u3002</p>
+        <div class="ncm-sort-script-command-line">
+          <div class="ncm-sort-script-panel-title">\u547D\u4EE4\u884C</div>
+          <div class="ncm-sort-script-command-input-row">
+            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off">
+            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="\u6267\u884C\u547D\u4EE4" aria-label="\u6267\u884C\u547D\u4EE4">\u21B5</button>
+          </div>
+        </div>
       </div>
     `,
       showConfirmButton: true,
@@ -2556,9 +3150,12 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         const preview = document.getElementById("playlist-script-live-preview");
         const summary = document.getElementById("playlist-script-live-summary");
         const activeLine = document.getElementById("playlist-script-active-line");
+        const commandInput = document.getElementById("playlist-script-command-input");
+        const appendButton = document.getElementById("playlist-script-command-append");
         let updateTimer = 0;
         let updateSequence = 0;
         let isScrollSyncing = false;
+        let selectedSourceLine = null;
         const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
         const getPreviewRows = () => [...preview.querySelectorAll("[data-source-line]")];
         const getPreviewRowPosition = (row) => {
@@ -2574,6 +3171,16 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           const lineHeight = Number.parseFloat(styles.lineHeight) || 21.45;
           const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
           return { lineHeight, paddingTop };
+        };
+        const updateActiveLine = (row) => {
+          if (!row) return;
+          const { lineHeight, paddingTop } = getEditorLineMetrics();
+          const lineNumber = Number(row.dataset.sourceLine);
+          selectedSourceLine = lineNumber;
+          activeLine.style.top = `${paddingTop + (lineNumber - 1) * lineHeight - editor.scrollTop}px`;
+          activeLine.dataset.line = String(lineNumber);
+          activeLine.dataset.order = row.dataset.songOrder;
+          activeLine.style.display = "block";
         };
         const interpolateAnchors = (value, anchors, sourceKey, targetKey) => {
           if (anchors.length === 1) return anchors[0][targetKey];
@@ -2597,7 +3204,11 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         const syncScroll = (source, target) => {
           if (isScrollSyncing) return;
           const rows = getPreviewRows();
-          if (!rows.length) return;
+          if (!rows.length) {
+            activeLine.style.display = "none";
+            selectedSourceLine = null;
+            return;
+          }
           const { lineHeight, paddingTop } = getEditorLineMetrics();
           const previewAnchors = rows.map((row) => {
             const position = getPreviewRowPosition(row);
@@ -2617,8 +3228,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             const distance = Math.abs(anchor.position - activeSourcePosition);
             return distance < bestDistance ? index : bestIndex;
           }, 0);
-          rows.forEach((row, index) => row.classList.toggle("is-active", index === activeIndex));
+          rows.forEach((row, index) => row.classList.toggle("is-selected", index === activeIndex));
           const activeLineNumber = Number(rows[activeIndex].dataset.sourceLine);
+          selectedSourceLine = activeLineNumber;
           activeLine.style.top = `${paddingTop + (activeLineNumber - 1) * lineHeight - editor.scrollTop}px`;
           activeLine.dataset.line = String(activeLineNumber);
           activeLine.dataset.order = rows[activeIndex].dataset.songOrder;
@@ -2640,9 +3252,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         };
         preview.addEventListener("scroll", () => syncScroll(preview, editor));
         editor.addEventListener("scroll", () => syncScroll(editor, preview));
-        const renderPreview = ({ commands = [], expanded = null, error = "", loading = false } = {}) => {
+        const renderPreview = ({ commands = [], expanded = null, resolvedItems = [], error = "", loading = false } = {}) => {
           if (loading) {
-            summary.innerHTML = '<span class="is-loading">\u6B63\u5728\u89E3\u6790\u811A\u672C\u548C\u4E13\u8F91\u2026\u2026</span>';
+            summary.innerHTML = '<span class="is-loading">\u6B63\u5728\u66F4\u65B0\u9884\u89C8\u2026\u2026</span>';
             preview.innerHTML = "";
             activeLine.style.display = "none";
             return;
@@ -2662,6 +3274,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           const currentIds = currentItems.map((item) => String(item.id));
           const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
           const currentMap = new Map(currentItems.map((item) => [String(item.id), item]));
+          const resolvedMap = new Map(resolvedItems.map((item) => [String(item.id), item]));
           const addedSet = new Set(diff.addedIds);
           const commandBlocks = new Map(expanded.blocks.map((block) => [block.line, block]));
           let targetSongOffset = 0;
@@ -2674,8 +3287,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             const blockAddedCount = block.songIds.filter((id) => addedSet.has(String(id))).length;
             const marker = blockAddedCount === block.songIds.length ? "+" : blockAddedCount ? "~" : "\xB7";
             const firstItem = block.items?.[0] || { id: block.songIds[0] };
-            const title = isAlbum ? block.albumName || `\u4E13\u8F91 ${command.id}` : currentMap.get(String(command.id))?.title || firstItem.title || `\u6B4C\u66F2 ${command.id}`;
-            const meta = isAlbum ? `${block.albumArtist ? `${block.albumArtist} \xB7 ` : ""}${block.songIds.length} \u9996\u6B4C\u66F2` : [currentMap.get(String(command.id))?.artist, currentMap.get(String(command.id))?.album].filter(Boolean).join(" \xB7 ") || `ID ${command.id}`;
+            const songItem = resolvedMap.get(String(command.id)) || currentMap.get(String(command.id)) || firstItem;
+            const title = isAlbum ? block.albumName || `\u4E13\u8F91 ${command.id}` : songItem.title || `\u6B4C\u66F2 ${command.id}`;
+            const meta = isAlbum ? `${block.albumArtist ? `${block.albumArtist} \xB7 ` : ""}${block.songIds.length} \u9996\u6B4C\u66F2` : [songItem.artist, songItem.album].filter(Boolean).join(" \xB7 ") || `ID ${command.id}`;
             const trackRows = isAlbum ? block.songIds.map((id, index) => {
               const item = currentMap.get(String(id)) || block.items?.[index] || { id };
               const isTrackAdded = addedSet.has(String(id));
@@ -2691,7 +3305,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
               `;
             }).join("") : "";
             return `
-            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group">
+            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group ${selectedSourceLine === command.line ? "is-selected" : ""}" tabindex="0" role="button" aria-label="\u9009\u62E9\u6B4C\u66F2 ${songStart}">
               <div class="ncm-sort-script-preview-row ${blockAddedCount ? "is-added" : ""}">
                 <span class="ncm-sort-script-preview-marker">${marker}</span>
                 <span class="ncm-sort-script-preview-details">
@@ -2712,30 +3326,81 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             <span>\u987A\u5E8F <strong>${diff.changedOrder ? "\u53D8\u5316" : "\u4E0D\u53D8"}</strong></span>
         `;
           preview.innerHTML = `<ol class="ncm-sort-script-preview-list">${rows}</ol>`;
+          if (!getPreviewRows().some((row) => Number(row.dataset.sourceLine) === selectedSourceLine)) {
+            selectedSourceLine = null;
+          }
           requestAnimationFrame(() => syncScroll(preview, editor));
         };
         const updatePreview = async () => {
           const sequence = ++updateSequence;
           let commands;
           try {
-            commands = parsePlaylistScript(editor.value);
+            commands = parseSongOnlyPlaylistScript(editor.value);
           } catch (error) {
             renderPreview({ error: error.message });
             return;
           }
-          if (!resolveScript) {
-            renderPreview();
-            return;
-          }
           renderPreview({ loading: true });
           try {
-            const expanded = await resolveScript(commands);
-            if (sequence === updateSequence) renderPreview({ commands, expanded });
+            const expanded = await resolvePlaylistCommands(commands);
+            const resolvedItems = resolveSongItems ? await resolveSongItems(expanded.songIds) : [];
+            if (sequence === updateSequence) renderPreview({ commands, expanded, resolvedItems });
           } catch (error) {
             if (sequence === updateSequence) renderPreview({ error: error.message || String(error) });
           }
         };
+        const appendCommand = async () => {
+          let command;
+          try {
+            command = parseCommandLine(commandInput.value);
+          } catch (error) {
+            showToast(error.message || String(error));
+            commandInput.focus();
+            return;
+          }
+          appendButton.disabled = true;
+          commandInput.disabled = true;
+          try {
+            const currentText = editor.value.replace(/\s+$/, "");
+            const currentCommands = currentText ? parseSongOnlyPlaylistScript(currentText) : [];
+            const currentIds = currentCommands.map((item) => item.id);
+            const currentPlan = createSongPlan(currentIds);
+            if (command.type === "clear") {
+              const clearedPlan = applyCommand(currentPlan, await resolveCommand(command));
+              editor.value = buildPlaylistScript(clearedPlan.songIds);
+              selectedSourceLine = null;
+              commandInput.value = "";
+              editor.focus();
+              updatePreview();
+              showToast("\u5DF2\u6E05\u7A7A\u6267\u884C\u65B9\u6848");
+              return;
+            }
+            const selectedIndex = command.position == null && selectedSourceLine == null ? -1 : currentCommands.findIndex((item) => item.line === selectedSourceLine);
+            if (command.type === "album") showToast(`\u6B63\u5728\u8BFB\u53D6\u4E13\u8F91 ${command.id}...`);
+            if (!resolveCommand2) throw new Error("\u5F53\u524D\u65E0\u6CD5\u89E3\u6790\u547D\u4EE4");
+            const resolved = await resolveCommand2(command, currentPlan);
+            const nextPlan = applyCommand(currentPlan, resolved, {
+              position: command.position,
+              selectedIndex,
+              selectedSongId: selectedIndex >= 0 ? currentIds[selectedIndex] : null
+            });
+            editor.value = buildPlaylistScript(nextPlan.songIds);
+            selectedSourceLine = nextPlan.selectedIndex == null ? null : nextPlan.selectedIndex + 1;
+            commandInput.value = "";
+            editor.focus();
+            updatePreview();
+            const successMessage = command.type === "album" ? `\u5DF2\u5C55\u5F00\u5E76\u63D2\u5165 ${resolved.songIds.length} \u9996\u6B4C\u66F2` : command.type === "song" ? "\u5DF2\u63D2\u5165 1 \u9996\u6B4C\u66F2" : command.type === "sort" ? "\u5DF2\u5B8C\u6210\u6392\u5E8F" : command.type === "remove" ? "\u5DF2\u5220\u9664\u6307\u5B9A\u6B4C\u66F2" : command.type === "move" ? "\u5DF2\u79FB\u52A8\u6307\u5B9A\u6B4C\u66F2" : "\u5DF2\u4EA4\u6362\u6B4C\u66F2\u4F4D\u7F6E";
+            showToast(successMessage);
+          } catch (error) {
+            showToast(error.message || String(error));
+            commandInput.focus();
+          } finally {
+            appendButton.disabled = false;
+            commandInput.disabled = false;
+          }
+        };
         editor.addEventListener("input", () => {
+          selectedSourceLine = null;
           clearTimeout(updateTimer);
           updateTimer = setTimeout(updatePreview, 280);
         });
@@ -2755,12 +3420,48 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             showToast("\u65E0\u6CD5\u76F4\u63A5\u8BBF\u95EE\u526A\u8D34\u677F\uFF0C\u5DF2\u9009\u4E2D\u811A\u672C\u5185\u5BB9\uFF0C\u8BF7\u624B\u52A8\u590D\u5236");
           }
         });
+        appendButton.addEventListener("click", appendCommand);
+        commandInput.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter") return;
+          event.preventDefault();
+          appendCommand();
+        });
+        preview.addEventListener("click", (event) => {
+          const row = event.target.closest("[data-source-line]");
+          if (!row || !preview.contains(row)) return;
+          selectedSourceLine = Number(row.dataset.sourceLine);
+          getPreviewRows().forEach((item) => item.classList.toggle("is-selected", item === row));
+          updateActiveLine(row);
+          const position = getPreviewRowPosition(row);
+          const targetScrollTop = clamp(
+            position.top + position.height / 2 - preview.clientHeight / 2,
+            0,
+            preview.scrollHeight - preview.clientHeight
+          );
+          preview.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+        });
+        preview.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" && event.key !== " ") return;
+          const row = event.target.closest("[data-source-line]");
+          if (!row || !preview.contains(row)) return;
+          event.preventDefault();
+          selectedSourceLine = Number(row.dataset.sourceLine);
+          getPreviewRows().forEach((item) => item.classList.toggle("is-selected", item === row));
+          updateActiveLine(row);
+          const position = getPreviewRowPosition(row);
+          const targetScrollTop = clamp(
+            position.top + position.height / 2 - preview.clientHeight / 2,
+            0,
+            preview.scrollHeight - preview.clientHeight
+          );
+          preview.scrollTo({ top: targetScrollTop, behavior: "smooth" });
+        });
         updatePreview();
       },
       preConfirm: () => {
         const value = document.getElementById("playlist-script-editor").value;
         try {
-          parsePlaylistScript(value);
+          parseSongOnlyPlaylistScript(value);
         } catch (error) {
           Swal.showValidationMessage(error.message);
           return false;
@@ -2776,7 +3477,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     addedCount,
     removedCount,
     changedOrder,
-    albumCount,
     externalChange = false
   }) {
     const warning = externalChange ? '<p class="ncm-sort-script-warning">\u5F53\u524D\u6B4C\u5355\u5DF2\u504F\u79BB\u4E0A\u6B21\u5E94\u7528\u540E\u7684\u72B6\u6001\u3002\u786E\u8BA4\u540E\u5C06\u6309\u7167\u8FD9\u4EFD\u811A\u672C\u8986\u76D6\u5F53\u524D\u53D8\u5316\u3002</p>' : "";
@@ -2793,7 +3493,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           <div><span>\u5C55\u5F00\u540E\u6B4C\u66F2</span><strong>${targetCount}</strong></div>
           <div><span>\u65B0\u589E\u6B4C\u66F2</span><strong>${addedCount}</strong></div>
           <div><span>\u79FB\u9664\u6B4C\u66F2</span><strong>${removedCount}</strong></div>
-          <div><span>\u4E13\u8F91\u547D\u4EE4</span><strong>${albumCount}</strong></div>
           <div><span>\u987A\u5E8F\u53D8\u5316</span><strong>${changedOrder ? "\u6709" : "\u65E0"}</strong></div>
         </div>
         <p class="ncm-sort-script-help">\u786E\u8BA4\u540E\u4F1A\u4FDD\u5B58\u5F53\u524D\u987A\u5E8F\u5907\u4EFD\uFF0C\u5E76\u5C06\u6B4C\u5355\u5199\u56DE\u4E3A\u811A\u672C\u5C55\u5F00\u540E\u7684\u7ED3\u679C\u3002</p>
@@ -2831,7 +3530,7 @@ ${operationText}`,
         <p>\u8F93\u5165\u4E09\u4E2A\u6570\u5B57\u6765\u79FB\u52A8\u6B4C\u66F2\uFF1A</p>
         <p class="ncm-sort-help">
           \u4F8B\u5982\uFF1A2, 6, 10<br>
-          \u8868\u793A\u5C06\u5E8F\u53F7 2-6 \u7684\u6B4C\u66F2\u79FB\u5230\u5E8F\u53F7 10 \u7684\u6B4C\u66F2\u540E\u9762
+          \u8868\u793A\u5C06\u5E8F\u53F7 2-6 \u7684\u6B4C\u66F2\u79FB\u5230\u5E8F\u53F7 10 \u7684\u6B4C\u66F2\u540E\u9762\uFF1B\u76EE\u6807\u4F4D\u7F6E\u586B 0 \u8868\u793A\u79FB\u5230\u6700\u524D\u9762
         </p>
       </div>
       <div class="ncm-sort-fields">
@@ -2845,7 +3544,7 @@ ${operationText}`,
         </label>
         <label class="ncm-sort-field">
           <span class="ncm-sort-label">\u76EE\u6807\u4F4D\u7F6E\uFF1A</span>
-          <input id="target-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="\u76EE\u6807">
+          <input id="target-pos" type="number" min="0" class="swal2-input ncm-sort-input" placeholder="\u76EE\u6807">
         </label>
       </div>
     `,
@@ -2862,8 +3561,8 @@ ${operationText}`,
           Swal.showValidationMessage("\u8BF7\u8F93\u5165\u6709\u6548\u7684\u6570\u5B57");
           return false;
         }
-        if (start < 1 || end < 1 || target < 1) {
-          Swal.showValidationMessage("\u4F4D\u7F6E\u5FC5\u987B\u5927\u4E8E\u7B49\u4E8E 1");
+        if (start < 1 || end < 1 || target < 0) {
+          Swal.showValidationMessage("\u8D77\u59CB\u3001\u7ED3\u675F\u4F4D\u7F6E\u5FC5\u987B\u5927\u4E8E\u7B49\u4E8E 1\uFF0C\u76EE\u6807\u4F4D\u7F6E\u5FC5\u987B\u5927\u4E8E\u7B49\u4E8E 0");
           return false;
         }
         if (start > end) {
@@ -3311,8 +4010,60 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
   }
 
-  // src/operations/manual-sort.js
+  // src/operations/sort-by-random.js
   function sameOrder(left, right) {
+    return left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
+  }
+  async function sortByRandom(pid) {
+    if (!confirm("\u5C06\u968F\u673A\u6253\u4E71\u5F53\u524D\u6B4C\u5355\u987A\u5E8F\uFF0C\u6392\u5E8F\u540E\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u3002\u7EE7\u7EED\uFF1F")) return;
+    try {
+      showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
+      const { playlist, items, originalSongIds } = await getAllSongs(pid);
+      showToast(`\u83B7\u53D6\u5B8C\u6210\uFF1A${items.length} \u9996\uFF0C\u5F00\u59CB\u968F\u673A\u6392\u5E8F...`);
+      const ordered = shuffleItems(items).map((item) => item.id);
+      if (sameOrder(ordered, originalSongIds)) {
+        Swal.fire({
+          icon: "info",
+          title: "\u968F\u673A\u7ED3\u679C\u4E0E\u539F\u987A\u5E8F\u76F8\u540C",
+          text: `${playlist.name}
+\u672A\u5199\u56DE\u6B4C\u5355`,
+          customClass: swalClasses
+        });
+        return;
+      }
+      const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "sort" });
+      showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F(op=update)...");
+      const response = await updatePlaylistOrder(pid, ordered);
+      if (response && response.code === 200) {
+        Swal.fire({
+          icon: "success",
+          title: "\u968F\u673A\u6392\u5E8F\u5B8C\u6210",
+          text: `${playlist.name}
+\u5171 ${ordered.length} \u9996
+${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u968F\u673A\u6392\u5E8F\u524D\u987A\u5E8F\n" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+          customClass: swalClasses
+        });
+      } else {
+        Swal.fire({
+          icon: "error",
+          title: "\u968F\u673A\u6392\u5E8F\u5931\u8D25",
+          text: JSON.stringify(response),
+          customClass: swalClasses
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      Swal.fire({
+        icon: "error",
+        title: "\u51FA\u9519",
+        text: error?.message || String(error),
+        customClass: swalClasses
+      });
+    }
+  }
+
+  // src/operations/manual-sort.js
+  function sameOrder2(left, right) {
     return left.length === right.length && left.every((id, index) => String(id) === String(right[index]));
   }
   async function manualSortSongs(pid) {
@@ -3324,7 +4075,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     if (orderedSongIds.length !== items.length) {
       throw new Error("\u624B\u52A8\u6392\u5E8F\u5217\u8868\u4E0E\u6B4C\u5355\u6B4C\u66F2\u6570\u91CF\u4E0D\u4E00\u81F4\uFF0C\u8BF7\u91CD\u8BD5");
     }
-    if (sameOrder(orderedSongIds, originalSongIds)) {
+    if (sameOrder2(orderedSongIds, originalSongIds)) {
       Swal.fire({
         icon: "info",
         title: "\u987A\u5E8F\u672A\u6539\u53D8",
@@ -3373,26 +4124,16 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       });
       return;
     }
-    if (target >= start && target <= end) {
+    if (target > start - 1 && target < end) {
       Swal.fire({
         icon: "error",
         title: "\u76EE\u6807\u4F4D\u7F6E\u65E0\u6548",
-        text: `\u76EE\u6807\u4F4D\u7F6E\uFF08${target}\uFF09\u4E0D\u80FD\u5728\u8D77\u59CB\u4F4D\u7F6E\uFF08${start}\uFF09\u548C\u7ED3\u675F\u4F4D\u7F6E\uFF08${end}\uFF09\u4E4B\u95F4`,
+        text: `\u76EE\u6807\u4F4D\u7F6E\uFF08${target}\uFF09\u4E0D\u80FD\u4F4D\u4E8E\u79FB\u52A8\u533A\u95F4\u5185\u90E8`,
         customClass: swalClasses
       });
       return;
     }
-    const startIdx = start - 1;
-    const endIdx = end - 1;
-    const targetIdx = target - 1;
-    const newOrder = [...items];
-    const movedSongs = newOrder.splice(startIdx, endIdx - startIdx + 1);
-    let insertIdx = targetIdx;
-    if (targetIdx > endIdx) {
-      insertIdx = targetIdx - movedSongs.length;
-    }
-    newOrder.splice(insertIdx + 1, 0, ...movedSongs);
-    const orderedIds = newOrder.map((x) => x.id);
+    const orderedIds = moveSongRange(items.map((item) => item.id), start, end, target);
     const backupSaved = await saveOrderBackup(pid, originalSongIds, playlist.name, { operation: "move" });
     showToast("\u5199\u56DE\u6B4C\u5355\u987A\u5E8F...");
     const res = await updatePlaylistOrder(pid, orderedIds);
@@ -3400,7 +4141,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       Swal.fire({
         icon: "success",
         title: "\u79FB\u52A8\u5B8C\u6210",
-        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762<br>${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u79FB\u52A8\u524D\u987A\u5E8F<br>" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
+        html: `\u5DF2\u5C06\u4F4D\u7F6E ${start}-${end} \u7684\u6B4C\u66F2${target === 0 ? "\u79FB\u5230\u6B4C\u5355\u6700\u524D\u9762" : `\u79FB\u5230\u4F4D\u7F6E ${target} \u540E\u9762`}<br>${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u79FB\u52A8\u524D\u987A\u5E8F<br>" : ""}\u5237\u65B0\u9875\u9762\u67E5\u770B\u65B0\u987A\u5E8F`,
         customClass: swalClasses
       });
     } else {
@@ -3644,38 +4385,104 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     }
     return "\u5F53\u524D\u6B4C\u5355\u5DF2\u504F\u79BB\u4E0A\u6B21\u5E94\u7528\u540E\u7684\u72B6\u6001\u3002\u7EE7\u7EED\u5E94\u7528\u4F1A\u4EE5\u672C\u5730\u811A\u672C\u8986\u76D6\u5F53\u524D\u6B4C\u5355\u53D8\u5316\u3002";
   }
+  async function getEditorScript(saved, currentIds, resolveScript) {
+    if (!saved) return buildPlaylistScript(currentIds);
+    if (!saved.scriptText.trim()) return "";
+    let commands;
+    try {
+      commands = parsePlaylistScript(saved.scriptText);
+    } catch (error) {
+      throw new Error(`\u5DF2\u4FDD\u5B58\u7684\u6B4C\u5355\u7F16\u6392\u811A\u672C\u65E0\u6CD5\u89E3\u6790\uFF0C\u5DF2\u505C\u6B62\u64CD\u4F5C\uFF1A${error.message || String(error)}`);
+    }
+    if (!commands.some((command) => command.type === "album")) {
+      return buildPlaylistScript(commands.map((command) => command.id));
+    }
+    try {
+      showToast("\u6B63\u5728\u5C06\u65E7\u7248\u4E13\u8F91\u547D\u4EE4\u5C55\u5F00\u4E3A\u6B4C\u66F2\u547D\u4EE4...");
+      const expanded = await resolveScript(commands);
+      return buildPlaylistScript(expanded.songIds);
+    } catch (error) {
+      throw new Error(`\u5DF2\u4FDD\u5B58\u7684\u4E13\u8F91\u547D\u4EE4\u65E0\u6CD5\u5B89\u5168\u5C55\u5F00\uFF0C\u5DF2\u505C\u6B62\u64CD\u4F5C\uFF1A${error.message || String(error)}`);
+    }
+  }
   async function editPlaylistScript(pid) {
     showToast("\u5F00\u59CB\u83B7\u53D6\u6B4C\u5355\u6B4C\u66F2...");
     const { playlist, items, originalSongIds } = await getAllSongs(pid);
     const saved = await loadPlaylistScript(pid);
     const currentIds = normalizeIds2(originalSongIds);
-    const initialScript = saved?.scriptText || buildPlaylistScript(currentIds);
-    const state = getPlaylistScriptState(currentIds, saved);
     const albumResponses = /* @__PURE__ */ new Map();
-    const resolveScript = (commands2) => expandPlaylistScript(commands2, {
-      fetchAlbum: async (albumId) => {
-        if (!albumResponses.has(albumId)) {
-          albumResponses.set(albumId, await fetchAlbumDetail(albumId));
-        }
-        return albumResponses.get(albumId);
+    const songItemsById = new Map(items.map((item) => [String(item.id), item]));
+    const fetchAlbum = async (albumId) => {
+      if (!albumResponses.has(albumId)) {
+        albumResponses.set(albumId, await fetchAlbumDetail(albumId));
       }
-    });
+      return albumResponses.get(albumId);
+    };
+    const resolveScript = (commands2) => resolvePlaylistCommands(commands2, { fetchAlbum });
+    const resolveSongItems = async (ids) => {
+      const missingIds = [...new Set(ids.map((id) => String(id)))].filter((id) => !songItemsById.has(id));
+      if (missingIds.length) {
+        const response = await fetchSongDetailByIds(missingIds.map((id) => ({ id })));
+        if (!response || response.code !== 200) {
+          throw new Error(`\u83B7\u53D6\u6B4C\u66F2\u8BE6\u60C5\u5931\u8D25\uFF1A${JSON.stringify(response)}`);
+        }
+        for (const song of response.songs || []) {
+          const item = toSongItem(song);
+          songItemsById.set(String(item.id), item);
+        }
+      }
+      const missingAfterFetch = ids.map((id) => String(id)).filter((id) => !songItemsById.has(id));
+      if (missingAfterFetch.length) {
+        throw new Error(`\u6B4C\u66F2\u8BE6\u60C5\u4E0D\u5B8C\u6574\uFF0C\u7F3A\u5C11\uFF1A${missingAfterFetch.slice(0, 5).join("\u3001")}`);
+      }
+      return ids.map((id) => songItemsById.get(String(id)));
+    };
+    const sortSettingsPromise = Promise.all([
+      loadTitleSortConfig(),
+      loadDateSortSettings(),
+      loadArtistSortSettings(),
+      loadHeatSortConfig()
+    ]).then(([title, date, artist, heat]) => ({ title, date, artist, heat }));
+    const resolveCommandWithCache = async (command, plan) => {
+      if (command.type !== "sort") return resolveCommand(command, { fetchAlbum });
+      if (!plan || !Array.isArray(plan.songIds)) {
+        throw new Error("\u6392\u5E8F\u547D\u4EE4\u7F3A\u5C11\u5F53\u524D\u6267\u884C\u65B9\u6848");
+      }
+      if (command.key === "random") {
+        return resolveCommand(command, {
+          fetchAlbum,
+          sortConfig: { random: true, randomFn: Math.random }
+        });
+      }
+      const sortItems = await resolveSongItems(plan.songIds);
+      const settings = await sortSettingsPromise;
+      const sortConfig = resolveSortConfig(command, settings);
+      if (command.key === "date" || command.key === "artist" && sortConfig.artist.sortSameArtistByDate) {
+        await ensurePublishTimes(sortItems);
+      }
+      if (command.key === "heat") {
+        const metricResult = await ensureHeatMetric(sortItems, sortConfig.heat.metric);
+        if (metricResult.failed) {
+          showToast(`${metricResult.failed} \u9996\u6B4C\u66F2\u7684\u6392\u5E8F\u6307\u6807\u83B7\u53D6\u5931\u8D25\uFF0C\u5C06\u6392\u5728\u672B\u5C3E`);
+        }
+      }
+      return resolveCommand(command, { fetchAlbum, sortConfig, sortItems });
+    };
+    const initialScript = await getEditorScript(saved, currentIds, resolveScript);
+    const state = getPlaylistScriptState(currentIds, saved);
     const editorResult = await showPlaylistScriptDialog(initialScript, {
       playlistName: playlist.name,
       currentCount: currentIds.length,
       currentScript: buildPlaylistScript(currentIds),
       currentItems: items,
       resolveScript,
+      resolveCommand: resolveCommandWithCache,
+      resolveSongItems,
       warning: getDriftWarning(state)
     });
     if (!editorResult.isConfirmed) return;
     const scriptText = editorResult.value.scriptText.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
-    const commands = parsePlaylistScript(scriptText);
-    await savePlaylistScript(pid, {
-      scriptText,
-      appliedSongIds: saved?.appliedSongIds?.length ? saved.appliedSongIds : currentIds,
-      appliedScriptText: saved?.appliedScriptText || initialScript
-    });
+    const commands = parseSongOnlyPlaylistScript(scriptText);
     let expanded;
     try {
       showToast("\u6B63\u5728\u5C55\u5F00\u6B4C\u5355\u7F16\u6392\u811A\u672C...");
@@ -3684,6 +4491,11 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       await showOperationError("\u811A\u672C\u5C55\u5F00\u5931\u8D25", error);
       return;
     }
+    await savePlaylistScript(pid, {
+      scriptText,
+      appliedSongIds: saved && Array.isArray(saved.appliedSongIds) ? saved.appliedSongIds : currentIds,
+      appliedScriptText: saved && typeof saved.appliedScriptText === "string" ? saved.appliedScriptText : initialScript
+    });
     const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
     const previewResult = await showPlaylistScriptPreviewDialog({
       playlistName: playlist.name,
@@ -3692,7 +4504,6 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
       addedCount: diff.addedIds.length,
       removedCount: diff.removedIds.length,
       changedOrder: diff.changedOrder,
-      albumCount: commands.filter((command) => command.type === "album").length,
       externalChange: state.currentChanged && !sameSongOrder(currentIds, expanded.songIds)
     });
     if (!previewResult.isConfirmed) return;
@@ -3788,6 +4599,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u5199\u56DE\u5
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>
         <button id="sort-by-heat" class="ncm-sort-menu-button">\u6309\u70ED\u5EA6\u6392\u5E8F</button>
+        <button id="sort-by-random" class="ncm-sort-menu-button">\u968F\u673A\u6392\u5E8F</button>
         <button id="manual-sort" class="ncm-sort-menu-button">\u624B\u52A8\u6392\u5E8F</button>
         ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">\u6062\u590D\u4E0A\u6B21\u64CD\u4F5C\u524D\u987A\u5E8F</button>' : ""}
         <button id="batch-move" class="ncm-sort-menu-button">\u6279\u91CF\u79FB\u52A8\u6B4C\u66F2</button>
@@ -3858,6 +4670,20 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u5199\u56DE\u5
           Swal.close();
           try {
             await sortByHeat(pid);
+          } catch (e) {
+            console.error(e);
+            Swal.fire({
+              icon: "error",
+              title: "\u51FA\u9519",
+              text: e?.message || String(e),
+              customClass: swalClasses
+            });
+          }
+        });
+        document.getElementById("sort-by-random").addEventListener("click", async () => {
+          Swal.close();
+          try {
+            await sortByRandom(pid);
           } catch (e) {
             console.error(e);
             Swal.fire({

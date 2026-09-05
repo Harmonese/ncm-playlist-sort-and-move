@@ -9,7 +9,7 @@
 <p align="center">
   <a href="https://github.com/Harmonese/ncm-playlist-sort-and-move/actions/workflows/build.yml"><img src="https://github.com/Harmonese/ncm-playlist-sort-and-move/actions/workflows/build.yml/badge.svg?branch=main" alt="Build Status"></a>
   <a href="https://github.com/Harmonese/ncm-playlist-sort-and-move/blob/main/LICENSE"><img src="https://img.shields.io/github/license/Harmonese/ncm-playlist-sort-and-move" alt="License"></a>
-  <img src="https://img.shields.io/badge/version-0.9.0-e00214" alt="Version 0.9.0">
+  <img src="https://img.shields.io/badge/version-0.9.1-e00214" alt="Version 0.9.1">
   <img src="https://img.shields.io/badge/userscript-Tampermonkey%20%7C%20Violentmonkey-e00214" alt="Userscript manager compatibility">
 </p>
 
@@ -23,7 +23,8 @@
 - 按发行日期排序，支持从新到旧和从旧到新，并可在日期相同时按专辑名称、专辑内曲目顺序排列。
 - 按歌手排序，使用与标题排序相同的文字比较规则，并可在同一歌手内按发行时间排序。
 - 按热度排序，支持按红心数量、热度值或评论数量进行升序、降序排列。
-- 使用歌单编排脚本按歌曲 ID 或专辑 ID 声明并重建歌单。
+- 随机排序整个歌单或指定歌曲区间。
+- 使用歌单编排脚本按歌曲 ID 声明并重建歌单，也可以通过追加命令按专辑 ID 展开歌曲。
 - 手动拖动歌曲或文字体系优先级调整顺序，支持键盘上下移动。
 - 按序号区间批量移动歌曲。
 - 按序号区间批量删除歌曲。
@@ -45,11 +46,12 @@
 
 进入网易云音乐网页版歌单页后，脚本会在歌单操作区注入“歌单排序工具”按钮。点击后可以选择：
 
-- 歌单编排脚本：编辑一份完整的歌单声明。每行使用 `song <歌曲ID>` 或 `album <专辑ID>`，专辑会在执行时按曲目顺序展开。脚本按歌单 ID 保存在用户脚本存储中，再次打开同一歌单时会自动加载。应用前会预览新增、移除和顺序变化，并检测当前歌单是否偏离上次应用后的状态。
+- 歌单编排脚本：编辑一份完整的歌单声明。右侧脚本每行使用 `song <歌曲ID>`；下方命令行支持插入、清空、删除、移动、交换和排序命令。脚本按歌单 ID 保存在用户脚本存储中，再次打开同一歌单时会自动加载。应用前会预览新增、移除和顺序变化，并检测当前歌单是否偏离上次应用后的状态。
 - 按标题排序：根据歌曲标题从左到右逐个字符比较，支持统一的文字体系优先级和汉字排序方式。
 - 按发行日期排序：根据歌曲或专辑发行时间排序，可在确认前选择排序方向，以及日期相同时的专辑和曲目顺序。
 - 按歌手排序：按歌手名称从左到右比较，使用与标题排序相同的文字比较规则。歌手分组可以按名称排序，也可以保持原歌单中首次出现的顺序；每个分组内部可以保持原顺序或按发行日期排序。发行日期方向和“按发行日期排序”共享。
 - 按热度排序：可以选择红心数量、热度值或评论数量，并选择升序或降序。红心数量使用网易云 `/api/song/red/count` 接口；热度值使用歌曲详情接口提供的 `popularity` 字段；评论数量使用批量接口获取。缺失或请求失败的指标排在末尾，相同指标保持原歌单顺序。
+- 随机排序：在排序工具菜单中直接随机打乱当前歌单，并保存排序前顺序以便恢复。
 - 手动排序：在手动排序弹窗中拖动歌曲调整顺序，也可以聚焦右侧拖拽手柄后使用方向键移动；确认后会写回当前歌单。
 - 批量移动歌曲：输入起始位置、结束位置和目标位置，将指定区间移动到目标歌曲后面。
 - 批量删除歌曲：输入起始位置和结束位置，删除对应区间内的歌曲。
@@ -63,11 +65,33 @@
 歌单编排脚本的 v1 格式如下：
 
 ```text
-album 654321
+song 654321
 song 186003
 ```
 
-脚本是完整歌单声明，导出或从当前歌单生成时会使用歌曲命令作为规范表示，不会自动猜测专辑。ID 是唯一依据，名称和歌手名称不参与匹配；空脚本、无效 ID、无法获取的专辑以及展开后的重复歌曲都会阻止写回。
+右侧脚本是完整歌单声明，持久化的规范表示只包含歌曲命令，不会自动猜测专辑。需要追加专辑时，在下方命令行输入 `album <专辑ID>`，读取成功后会将专辑曲目转换成歌曲命令。ID 是唯一依据，名称和歌手名称不参与匹配；空脚本、无效 ID、展开后的重复歌曲都会阻止写回。旧版本已经保存的专辑命令会在再次打开时尝试自动展开为歌曲命令。
+
+脚本文本为空时表示目标歌单为空；`clear` 会清空当前执行方案，之后可以继续插入歌曲或专辑。每次命令行操作都会基于最新执行方案重新解释 position。
+
+命令行示例：
+
+```text
+song 123 0
+album 456 10
+remove 2 5
+move 2 5 0
+swap 2 8
+sort title
+sort title 2 10
+sort date desc album track 2 10
+sort artist name date
+sort heat popularity desc
+sort random
+sort random 2 10
+```
+
+`song` 和 `album` 的 position 是 0-based 插入位置，范围为 `0..当前歌曲数`。`remove` 的区间和 `move` 的起止位置使用 1-based、包含首尾的歌曲位置；`move` 的 target 是 0-based 插入位置，`0` 表示最前，其他位置表示插入到对应歌曲之后。排序命令没有区间时作用于整个执行方案，末尾两个整数表示 1-based、包含首尾的排序区间。排序参数省略时使用当前排序设置，显式参数只对本次命令生效。
+`sort random` 不需要额外参数；末尾两个整数仍可指定 1-based、包含首尾的随机排序区间。
 
 ## 风险提示
 
@@ -84,9 +108,12 @@ song 186003
 ```bash
 npm install
 npm run verify
+npx playwright install chromium
+npm run test:browser
 ```
 
 `npm run verify` 会构建 `ncm-playlist-sort-and-move.user.js`，并检查生成文件的 JavaScript 语法。
+`npm run test:browser` 会启动本地测试页面，用 Playwright Chromium 驱动真实歌单编排弹窗，覆盖命令执行、排序、删除、插入、歌曲元数据显示和预览选中状态；测试使用 Mock 数据，不需要网易云登录，也不会访问网易云接口。首次运行前执行一次 `npx playwright install chromium` 即可。浏览器测试单独运行，不会让普通 `npm test` 依赖本机浏览器。
 
 推送涉及源码或构建配置的提交到 `main` 后，GitHub Actions 也会自动执行同样的构建和检查，并在构建产物有变化时将更新后的用户脚本提交回仓库。配合 Greasy Fork Webhook，可以实现后续版本的自动同步。
 

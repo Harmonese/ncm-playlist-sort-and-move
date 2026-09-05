@@ -4,7 +4,25 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.1] - 2026-09-05
+
+### Changed
+
+- Changed the persisted playlist script editor to accept only `song <id>` lines.
+- Added a separate append-command input that accepts `song <id>` or `album <id>`; album commands are expanded immediately into song lines and are never stored in the editor.
+- Added clickable preview songs as insertion anchors; new commands are inserted after the selected song or at the end when no song is selected.
+- Added automatic migration of previously saved album-based scripts by expanding them into song-only scripts when possible.
+- Added position-aware `song` and `album` command-line commands and a `clear` command for empty playlist plans.
+- Added `remove`, `move`, `swap`, and title/date/artist/heat `sort` commands, including range-limited sorting.
+- Added random sorting in the function menu and as `sort random [start end]` in the playlist command line.
+- Unified command-line and batch-move behavior for target insertion positions, including `0` for moving to the front.
+- Split the playlist script protocol and playlist execution-plan modules while retaining the compatibility facade.
+- Added a local Playwright browser regression suite for the real playlist-script dialog, using mocked playlist data without login or network access.
+
+### Fixed
+
+- Prevented malformed saved scripts, incomplete album data, partial playlist indexes, and incomplete song details from falling back to a writable current-playlist snapshot.
+- Kept the active alignment marker synchronized immediately when a preview row is clicked or keyboard-selected.
 
 ## [0.9.0] - 2026-09-04
 

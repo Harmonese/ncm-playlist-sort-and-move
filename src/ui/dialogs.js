@@ -7,7 +7,18 @@ import { loadTitleSortConfig } from '../settings/title-sort.js';
 import { loadArtistSortSettings } from '../settings/artist-sort.js';
 import { loadDateSortSettings } from '../settings/date-sort.js';
 import { HEAT_SORT_METRICS, normalizeHeatSortConfig } from '../sort/heat.js';
-import { getPlaylistScriptDiff, parsePlaylistScript } from '../data/playlist-script.js';
+import {
+  buildPlaylistScript,
+  parseCommandLine,
+  parseSongOnlyPlaylistScript
+} from '../data/playlist-script-protocol.js';
+import {
+  applyCommand,
+  createSongPlan,
+  getPlaylistScriptDiff,
+  resolveCommand as resolvePlanCommand,
+  resolvePlaylistCommands
+} from '../data/playlist-plan.js';
 import { showToast } from '../utils/dom.js';
 
 function getVisibleTextCategories(categoryIds) {
@@ -718,6 +729,8 @@ export function showPlaylistScriptDialog(scriptText, {
   currentScript = scriptText,
   currentItems = [],
   resolveScript = null,
+  resolveCommand = null,
+  resolveSongItems = null,
   warning = ''
 } = {}) {
   return Swal.fire({
@@ -726,20 +739,17 @@ export function showPlaylistScriptDialog(scriptText, {
       <div class="ncm-sort-script-editor">
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
-          <p class="ncm-sort-help">按顺序写入 song &lt;歌曲ID&gt; 或 album &lt;专辑ID&gt;，专辑会按曲目顺序展开。</p>
           <p class="ncm-sort-detected">当前歌单：${currentCount} 首歌曲</p>
           ${warning ? `<p class="ncm-sort-script-warning">${escapeHtml(warning)}</p>` : ''}
         </div>
         <div id="playlist-script-live-summary" class="ncm-sort-script-live-summary"></div>
         <div class="ncm-sort-script-columns">
           <div class="ncm-sort-script-preview-panel">
-            <div class="ncm-sort-script-panel-title">实时预览</div>
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-live-preview" class="ncm-sort-script-live-preview"></div>
             </div>
           </div>
           <div class="ncm-sort-script-command-panel">
-            <div class="ncm-sort-script-panel-title">编排命令</div>
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
               <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
@@ -750,7 +760,13 @@ export function showPlaylistScriptDialog(scriptText, {
             </div>
           </div>
         </div>
-        <p class="ncm-sort-script-help">脚本是完整歌单声明。应用后，当前歌单中未出现在脚本里的歌曲会被移除。</p>
+        <div class="ncm-sort-script-command-line">
+          <div class="ncm-sort-script-panel-title">命令行</div>
+          <div class="ncm-sort-script-command-input-row">
+            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off">
+            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="执行命令" aria-label="执行命令">↵</button>
+          </div>
+        </div>
       </div>
     `,
     showConfirmButton: true,
@@ -767,9 +783,12 @@ export function showPlaylistScriptDialog(scriptText, {
       const preview = document.getElementById('playlist-script-live-preview');
       const summary = document.getElementById('playlist-script-live-summary');
       const activeLine = document.getElementById('playlist-script-active-line');
+      const commandInput = document.getElementById('playlist-script-command-input');
+      const appendButton = document.getElementById('playlist-script-command-append');
       let updateTimer = 0;
       let updateSequence = 0;
       let isScrollSyncing = false;
+      let selectedSourceLine = null;
 
       const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
@@ -789,6 +808,17 @@ export function showPlaylistScriptDialog(scriptText, {
         const lineHeight = Number.parseFloat(styles.lineHeight) || 21.45;
         const paddingTop = Number.parseFloat(styles.paddingTop) || 0;
         return { lineHeight, paddingTop };
+      };
+
+      const updateActiveLine = (row) => {
+        if (!row) return;
+        const { lineHeight, paddingTop } = getEditorLineMetrics();
+        const lineNumber = Number(row.dataset.sourceLine);
+        selectedSourceLine = lineNumber;
+        activeLine.style.top = `${paddingTop + (lineNumber - 1) * lineHeight - editor.scrollTop}px`;
+        activeLine.dataset.line = String(lineNumber);
+        activeLine.dataset.order = row.dataset.songOrder;
+        activeLine.style.display = 'block';
       };
 
       const interpolateAnchors = (value, anchors, sourceKey, targetKey) => {
@@ -820,7 +850,11 @@ export function showPlaylistScriptDialog(scriptText, {
       const syncScroll = (source, target) => {
         if (isScrollSyncing) return;
         const rows = getPreviewRows();
-        if (!rows.length) return;
+        if (!rows.length) {
+          activeLine.style.display = 'none';
+          selectedSourceLine = null;
+          return;
+        }
 
         const { lineHeight, paddingTop } = getEditorLineMetrics();
         const previewAnchors = rows.map((row) => {
@@ -844,8 +878,9 @@ export function showPlaylistScriptDialog(scriptText, {
           const distance = Math.abs(anchor.position - activeSourcePosition);
           return distance < bestDistance ? index : bestIndex;
         }, 0);
-        rows.forEach((row, index) => row.classList.toggle('is-active', index === activeIndex));
+        rows.forEach((row, index) => row.classList.toggle('is-selected', index === activeIndex));
         const activeLineNumber = Number(rows[activeIndex].dataset.sourceLine);
+        selectedSourceLine = activeLineNumber;
         activeLine.style.top = `${paddingTop + (activeLineNumber - 1) * lineHeight - editor.scrollTop}px`;
         activeLine.dataset.line = String(activeLineNumber);
         activeLine.dataset.order = rows[activeIndex].dataset.songOrder;
@@ -871,9 +906,9 @@ export function showPlaylistScriptDialog(scriptText, {
       preview.addEventListener('scroll', () => syncScroll(preview, editor));
       editor.addEventListener('scroll', () => syncScroll(editor, preview));
 
-      const renderPreview = ({ commands = [], expanded = null, error = '', loading = false } = {}) => {
+      const renderPreview = ({ commands = [], expanded = null, resolvedItems = [], error = '', loading = false } = {}) => {
         if (loading) {
-          summary.innerHTML = '<span class="is-loading">正在解析脚本和专辑……</span>';
+          summary.innerHTML = '<span class="is-loading">正在更新预览……</span>';
           preview.innerHTML = '';
           activeLine.style.display = 'none';
           return;
@@ -894,6 +929,7 @@ export function showPlaylistScriptDialog(scriptText, {
         const currentIds = currentItems.map(item => String(item.id));
         const diff = getPlaylistScriptDiff(currentIds, expanded.songIds);
         const currentMap = new Map(currentItems.map(item => [String(item.id), item]));
+        const resolvedMap = new Map(resolvedItems.map(item => [String(item.id), item]));
         const addedSet = new Set(diff.addedIds);
         const commandBlocks = new Map(expanded.blocks.map(block => [block.line, block]));
         let targetSongOffset = 0;
@@ -906,13 +942,13 @@ export function showPlaylistScriptDialog(scriptText, {
           const blockAddedCount = block.songIds.filter(id => addedSet.has(String(id))).length;
           const marker = blockAddedCount === block.songIds.length ? '+' : blockAddedCount ? '~' : '·';
           const firstItem = block.items?.[0] || { id: block.songIds[0] };
+          const songItem = resolvedMap.get(String(command.id)) || currentMap.get(String(command.id)) || firstItem;
           const title = isAlbum
             ? block.albumName || `专辑 ${command.id}`
-            : currentMap.get(String(command.id))?.title || firstItem.title || `歌曲 ${command.id}`;
+            : songItem.title || `歌曲 ${command.id}`;
           const meta = isAlbum
             ? `${block.albumArtist ? `${block.albumArtist} · ` : ''}${block.songIds.length} 首歌曲`
-            : [currentMap.get(String(command.id))?.artist, currentMap.get(String(command.id))?.album]
-              .filter(Boolean).join(' · ') || `ID ${command.id}`;
+            : [songItem.artist, songItem.album].filter(Boolean).join(' · ') || `ID ${command.id}`;
           const trackRows = isAlbum
             ? block.songIds.map((id, index) => {
               const item = currentMap.get(String(id)) || block.items?.[index] || { id };
@@ -931,7 +967,7 @@ export function showPlaylistScriptDialog(scriptText, {
             : '';
 
           return `
-            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group">
+            <li data-source-line="${command.line}" data-song-order="${songStart === songEnd ? songStart : `${songStart}-${songEnd}`}" class="ncm-sort-script-preview-group ${selectedSourceLine === command.line ? 'is-selected' : ''}" tabindex="0" role="button" aria-label="选择歌曲 ${songStart}">
               <div class="ncm-sort-script-preview-row ${blockAddedCount ? 'is-added' : ''}">
                 <span class="ncm-sort-script-preview-marker">${marker}</span>
                 <span class="ncm-sort-script-preview-details">
@@ -952,6 +988,9 @@ export function showPlaylistScriptDialog(scriptText, {
             <span>顺序 <strong>${diff.changedOrder ? '变化' : '不变'}</strong></span>
         `;
         preview.innerHTML = `<ol class="ncm-sort-script-preview-list">${rows}</ol>`;
+        if (!getPreviewRows().some(row => Number(row.dataset.sourceLine) === selectedSourceLine)) {
+          selectedSourceLine = null;
+        }
         requestAnimationFrame(() => syncScroll(preview, editor));
       };
 
@@ -959,27 +998,96 @@ export function showPlaylistScriptDialog(scriptText, {
         const sequence = ++updateSequence;
         let commands;
         try {
-          commands = parsePlaylistScript(editor.value);
+          commands = parseSongOnlyPlaylistScript(editor.value);
         } catch (error) {
           renderPreview({ error: error.message });
           return;
         }
 
-        if (!resolveScript) {
-          renderPreview();
-          return;
-        }
-
         renderPreview({ loading: true });
         try {
-          const expanded = await resolveScript(commands);
-          if (sequence === updateSequence) renderPreview({ commands, expanded });
+          const expanded = await resolvePlaylistCommands(commands);
+          const resolvedItems = resolveSongItems
+            ? await resolveSongItems(expanded.songIds)
+            : [];
+          if (sequence === updateSequence) renderPreview({ commands, expanded, resolvedItems });
         } catch (error) {
           if (sequence === updateSequence) renderPreview({ error: error.message || String(error) });
         }
       };
 
+      const appendCommand = async () => {
+        let command;
+        try {
+          command = parseCommandLine(commandInput.value);
+        } catch (error) {
+          showToast(error.message || String(error));
+          commandInput.focus();
+          return;
+        }
+
+        appendButton.disabled = true;
+        commandInput.disabled = true;
+        try {
+          const currentText = editor.value.replace(/\s+$/, '');
+          const currentCommands = currentText
+            ? parseSongOnlyPlaylistScript(currentText)
+            : [];
+          const currentIds = currentCommands.map(item => item.id);
+          const currentPlan = createSongPlan(currentIds);
+
+          if (command.type === 'clear') {
+            const clearedPlan = applyCommand(currentPlan, await resolvePlanCommand(command));
+            editor.value = buildPlaylistScript(clearedPlan.songIds);
+            selectedSourceLine = null;
+            commandInput.value = '';
+            editor.focus();
+            updatePreview();
+            showToast('已清空执行方案');
+            return;
+          }
+
+          const selectedIndex = command.position == null && selectedSourceLine == null
+            ? -1
+            : currentCommands.findIndex(item => item.line === selectedSourceLine);
+          if (command.type === 'album') showToast(`正在读取专辑 ${command.id}...`);
+          if (!resolveCommand) throw new Error('当前无法解析命令');
+          const resolved = await resolveCommand(command, currentPlan);
+          const nextPlan = applyCommand(currentPlan, resolved, {
+            position: command.position,
+            selectedIndex,
+            selectedSongId: selectedIndex >= 0 ? currentIds[selectedIndex] : null
+          });
+          editor.value = buildPlaylistScript(nextPlan.songIds);
+          selectedSourceLine = nextPlan.selectedIndex == null
+            ? null
+            : nextPlan.selectedIndex + 1;
+          commandInput.value = '';
+          editor.focus();
+          updatePreview();
+          const successMessage = command.type === 'album'
+            ? `已展开并插入 ${resolved.songIds.length} 首歌曲`
+            : command.type === 'song'
+              ? '已插入 1 首歌曲'
+              : command.type === 'sort'
+                ? '已完成排序'
+                : command.type === 'remove'
+                  ? '已删除指定歌曲'
+                  : command.type === 'move'
+                    ? '已移动指定歌曲'
+                    : '已交换歌曲位置';
+          showToast(successMessage);
+        } catch (error) {
+          showToast(error.message || String(error));
+          commandInput.focus();
+        } finally {
+          appendButton.disabled = false;
+          commandInput.disabled = false;
+        }
+      };
+
       editor.addEventListener('input', () => {
+        selectedSourceLine = null;
         clearTimeout(updateTimer);
         updateTimer = setTimeout(updatePreview, 280);
       });
@@ -1000,13 +1108,49 @@ export function showPlaylistScriptDialog(scriptText, {
           showToast('无法直接访问剪贴板，已选中脚本内容，请手动复制');
         }
       });
+      appendButton.addEventListener('click', appendCommand);
+      commandInput.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter') return;
+        event.preventDefault();
+        appendCommand();
+      });
+      preview.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-source-line]');
+        if (!row || !preview.contains(row)) return;
+        selectedSourceLine = Number(row.dataset.sourceLine);
+        getPreviewRows().forEach(item => item.classList.toggle('is-selected', item === row));
+        updateActiveLine(row);
+        const position = getPreviewRowPosition(row);
+        const targetScrollTop = clamp(
+          position.top + position.height / 2 - preview.clientHeight / 2,
+          0,
+          preview.scrollHeight - preview.clientHeight
+        );
+        preview.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      });
+      preview.addEventListener('keydown', (event) => {
+        if (event.key !== 'Enter' && event.key !== ' ') return;
+        const row = event.target.closest('[data-source-line]');
+        if (!row || !preview.contains(row)) return;
+        event.preventDefault();
+        selectedSourceLine = Number(row.dataset.sourceLine);
+        getPreviewRows().forEach(item => item.classList.toggle('is-selected', item === row));
+        updateActiveLine(row);
+        const position = getPreviewRowPosition(row);
+        const targetScrollTop = clamp(
+          position.top + position.height / 2 - preview.clientHeight / 2,
+          0,
+          preview.scrollHeight - preview.clientHeight
+        );
+        preview.scrollTo({ top: targetScrollTop, behavior: 'smooth' });
+      });
 
       updatePreview();
     },
     preConfirm: () => {
       const value = document.getElementById('playlist-script-editor').value;
       try {
-        parsePlaylistScript(value);
+        parseSongOnlyPlaylistScript(value);
       } catch (error) {
         Swal.showValidationMessage(error.message);
         return false;
@@ -1023,7 +1167,6 @@ export function showPlaylistScriptPreviewDialog({
   addedCount,
   removedCount,
   changedOrder,
-  albumCount,
   externalChange = false
 }) {
   const warning = externalChange
@@ -1043,7 +1186,6 @@ export function showPlaylistScriptPreviewDialog({
           <div><span>展开后歌曲</span><strong>${targetCount}</strong></div>
           <div><span>新增歌曲</span><strong>${addedCount}</strong></div>
           <div><span>移除歌曲</span><strong>${removedCount}</strong></div>
-          <div><span>专辑命令</span><strong>${albumCount}</strong></div>
           <div><span>顺序变化</span><strong>${changedOrder ? '有' : '无'}</strong></div>
         </div>
         <p class="ncm-sort-script-help">确认后会保存当前顺序备份，并将歌单写回为脚本展开后的结果。</p>
@@ -1090,7 +1232,7 @@ export function showBatchMoveDialog() {
         <p>输入三个数字来移动歌曲：</p>
         <p class="ncm-sort-help">
           例如：2, 6, 10<br>
-          表示将序号 2-6 的歌曲移到序号 10 的歌曲后面
+          表示将序号 2-6 的歌曲移到序号 10 的歌曲后面；目标位置填 0 表示移到最前面
         </p>
       </div>
       <div class="ncm-sort-fields">
@@ -1104,7 +1246,7 @@ export function showBatchMoveDialog() {
         </label>
         <label class="ncm-sort-field">
           <span class="ncm-sort-label">目标位置：</span>
-          <input id="target-pos" type="number" min="1" class="swal2-input ncm-sort-input" placeholder="目标">
+          <input id="target-pos" type="number" min="0" class="swal2-input ncm-sort-input" placeholder="目标">
         </label>
       </div>
     `,
@@ -1123,8 +1265,8 @@ export function showBatchMoveDialog() {
         return false;
       }
 
-      if (start < 1 || end < 1 || target < 1) {
-        Swal.showValidationMessage('位置必须大于等于 1');
+      if (start < 1 || end < 1 || target < 0) {
+        Swal.showValidationMessage('起始、结束位置必须大于等于 1，目标位置必须大于等于 0');
         return false;
       }
 

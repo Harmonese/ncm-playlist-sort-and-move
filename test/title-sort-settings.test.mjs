@@ -36,6 +36,7 @@ const {
   loadPlaylistScript,
   savePlaylistScript
 } = await import('../src/settings/playlist-script.js');
+const { assertCompleteSongItems } = await import('../src/data/playlist.js');
 
 test('title sort settings use defaults when nothing is saved', async () => {
   storedValues.clear();
@@ -201,4 +202,12 @@ test('playlist scripts are stored independently for each playlist', async () => 
   assert.equal(await loadPlaylistScript('456'), null);
   assert.equal(await clearPlaylistScript('123'), true);
   assert.equal(await loadPlaylistScript('123'), null);
+});
+
+test('incomplete playlist song details are rejected before operations can write back', () => {
+  assert.throws(
+    () => assertCompleteSongItems(['1', '2'], [{ id: '1' }]),
+    /歌曲详情不完整/
+  );
+  assert.doesNotThrow(() => assertCompleteSongItems(['1', '2'], [{ id: '2' }, { id: '1' }]));
 });

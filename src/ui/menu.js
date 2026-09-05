@@ -2,6 +2,7 @@ import { sortByTitle } from '../operations/sort-by-title.js';
 import { sortByPublishDate } from '../operations/sort-by-date.js';
 import { sortByArtist } from '../operations/sort-by-artist.js';
 import { sortByHeat } from '../operations/sort-by-heat.js';
+import { sortByRandom } from '../operations/sort-by-random.js';
 import { manualSortSongs } from '../operations/manual-sort.js';
 import { batchMoveSongs } from '../operations/batch-move.js';
 import { batchDeleteSongs } from '../operations/batch-delete.js';
@@ -22,6 +23,7 @@ export async function showFunctionMenu(pid) {
         <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">按歌手排序</button>
         <button id="sort-by-heat" class="ncm-sort-menu-button">按热度排序</button>
+        <button id="sort-by-random" class="ncm-sort-menu-button">随机排序</button>
         <button id="manual-sort" class="ncm-sort-menu-button">手动排序</button>
         ${canRestore ? '<button id="restore-last-order" class="ncm-sort-menu-button">恢复上次操作前顺序</button>' : ''}
         <button id="batch-move" class="ncm-sort-menu-button">批量移动歌曲</button>
@@ -96,6 +98,21 @@ export async function showFunctionMenu(pid) {
         Swal.close();
         try {
           await sortByHeat(pid);
+        } catch (e) {
+          console.error(e);
+          Swal.fire({
+            icon: 'error',
+            title: '出错',
+            text: e?.message || String(e),
+            customClass: swalClasses
+          });
+        }
+      });
+
+      document.getElementById('sort-by-random').addEventListener('click', async () => {
+        Swal.close();
+        try {
+          await sortByRandom(pid);
         } catch (e) {
           console.error(e);
           Swal.fire({

@@ -589,11 +589,12 @@ export function installStyles() {
     }
 
     .ncm-sort-script-live-preview {
-      min-height: min(58vh, 520px);
-      max-height: min(58vh, 520px);
+      --ncm-sort-script-viewport-height: min(58vh, 520px);
+      min-height: var(--ncm-sort-script-viewport-height);
+      max-height: var(--ncm-sort-script-viewport-height);
       box-sizing: border-box;
       overflow-y: auto;
-      padding: 10px;
+      padding: 0 10px;
       border: 1px solid #e0e6e8;
       border-radius: 8px;
       background: #fbfcfc;
@@ -676,10 +677,25 @@ export function installStyles() {
       list-style: none;
     }
 
+    .ncm-sort-script-preview-list::before,
+    .ncm-sort-script-preview-list::after {
+      display: block;
+      height: calc((min(58vh, 520px) - 32px) / 2);
+      content: '';
+    }
+
     .ncm-sort-script-preview-group {
       margin: 0;
       padding: 0;
       list-style: none;
+      cursor: pointer;
+      outline: none;
+    }
+
+    .ncm-sort-script-preview-group.is-selected > .ncm-sort-script-preview-row {
+      border-color: #347b73;
+      background: #e6f3f0;
+      box-shadow: 0 0 0 2px rgba(52, 123, 115, 0.2);
     }
 
     .ncm-sort-script-track-list {
@@ -762,11 +778,6 @@ export function installStyles() {
       background: #f1f8f7;
     }
 
-    .ncm-sort-script-preview-group.is-active > .ncm-sort-script-preview-row {
-      border-color: #5c9a93;
-      box-shadow: 0 0 0 2px rgba(92, 154, 147, 0.16);
-    }
-
     .ncm-sort-script-preview-marker {
       width: 12px;
       flex: 0 0 12px;
@@ -846,14 +857,15 @@ export function installStyles() {
     }
 
     .ncm-sort-script-textarea {
+      --ncm-sort-script-viewport-height: min(58vh, 520px);
       display: block;
       width: 100%;
-      min-height: min(58vh, 520px);
-      max-height: min(58vh, 520px);
+      min-height: var(--ncm-sort-script-viewport-height);
+      max-height: var(--ncm-sort-script-viewport-height);
       box-sizing: border-box;
       resize: vertical;
       overflow-y: auto;
-      padding: 10px 14px;
+      padding: calc((var(--ncm-sort-script-viewport-height) - 21.45px) / 2) 14px;
       border: 1px solid #d5dddf;
       border-radius: 8px;
       outline: none;
@@ -874,6 +886,64 @@ export function installStyles() {
       flex-wrap: wrap;
       gap: 8px;
       margin-top: 9px;
+    }
+
+    .ncm-sort-script-command-line {
+      margin-top: 12px;
+      padding: 10px 12px 11px;
+      border: 1px solid #dfe8e6;
+      border-radius: 8px;
+      background: linear-gradient(135deg, #f7fbfa, #f1f8f6);
+      text-align: left;
+    }
+
+    .ncm-sort-script-command-input-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .ncm-sort-script-command-input-row::before {
+      color: #5c9a93;
+      content: '›';
+      font: 700 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input {
+      min-width: 0;
+      flex: 1 1 auto;
+      height: 32px;
+      box-sizing: border-box;
+      padding: 0 10px;
+      border: 1px solid #d5dddf;
+      border-radius: 6px;
+      outline: none;
+      background: #fff;
+      color: #263238;
+      font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input:focus {
+      border-color: #5c9a93;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button {
+      width: 34px;
+      min-height: 34px;
+      padding: 0 !important;
+      border-color: #5c9a93;
+      background: #5c9a93;
+      color: #fff;
+      font-size: 19px;
+      font-weight: 700;
+      line-height: 1;
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button:hover {
+      border-color: #347b73;
+      background: #347b73;
+      color: #fff;
     }
 
     .ncm-sort-script-tool-button {

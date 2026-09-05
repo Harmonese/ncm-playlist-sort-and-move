@@ -11,12 +11,40 @@ export function getPlaylistTrackIds(playlist) {
   return (playlist?.tracks || []).map(song => song.id);
 }
 
+export function assertCompleteSongItems(originalSongIds, items) {
+  const expectedIds = originalSongIds.map(id => String(id));
+  const actualIds = items.map(item => String(item.id));
+  const expectedCounts = new Map();
+  const actualCounts = new Map();
+
+  for (const id of expectedIds) expectedCounts.set(id, (expectedCounts.get(id) || 0) + 1);
+  for (const id of actualIds) actualCounts.set(id, (actualCounts.get(id) || 0) + 1);
+
+  const complete = expectedIds.length === actualIds.length
+    && expectedCounts.size === actualCounts.size
+    && [...expectedCounts].every(([id, count]) => actualCounts.get(id) === count);
+  if (complete) return;
+
+  const missingIds = [...expectedCounts]
+    .filter(([id, count]) => (actualCounts.get(id) || 0) < count)
+    .map(([id]) => id);
+  throw new Error(
+    `歌单歌曲详情不完整：应有 ${expectedIds.length} 首，实际获取 ${actualIds.length} 首${missingIds.length ? `；缺少 ${missingIds.slice(0, 5).join('、')}` : ''}`
+  );
+}
+
 export async function getAllSongs(pid) {
   const detail = await fetchPlaylistDetail(pid);
   if (!detail || detail.code !== 200) throw new Error('playlist/detail failed: ' + JSON.stringify(detail));
 
   const pl = detail.playlist;
   const originalSongIds = getPlaylistTrackIds(pl);
+  const trackCount = Number(pl.trackCount);
+  if (Number.isFinite(trackCount) && trackCount > originalSongIds.length) {
+    throw new Error(
+      `歌单歌曲索引不完整：应有 ${trackCount} 首，实际获取 ${originalSongIds.length} 首`
+    );
+  }
   const originalIndexById = new Map(
     originalSongIds.map((id, index) => [String(id), index])
   );
@@ -39,6 +67,8 @@ export async function getAllSongs(pid) {
       items.push(toSongItem(song, originalIndexById.get(String(song.id)) ?? index));
     }
   }
+
+  assertCompleteSongItems(originalSongIds, items);
 
   return {
     playlist: pl,
