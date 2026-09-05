@@ -155,7 +155,6 @@ export async function editPlaylistScript(pid) {
   const editorResult = await showPlaylistScriptDialog(initialScript, {
     playlistName: playlist.name,
     currentCount: currentIds.length,
-    currentScript: buildPlaylistScript(currentIds),
     currentItems: items,
     resolveScript,
     resolveCommand: resolveCommandWithCache,

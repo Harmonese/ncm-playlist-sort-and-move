@@ -18,7 +18,7 @@ export async function showFunctionMenu(pid) {
     title: '歌单排序工具',
     html: `
       <div class="ncm-sort-menu">
-        <button id="playlist-script" class="ncm-sort-menu-button">歌单编排脚本</button>
+        <button id="playlist-script" class="ncm-sort-menu-button">歌单编辑器</button>
         <button id="sort-by-title" class="ncm-sort-menu-button">按标题排序</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">按发行日期排序</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">按歌手排序</button>

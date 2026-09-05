@@ -569,6 +569,121 @@ export function installStyles() {
       text-align: left;
     }
 
+    .ncm-sort-script-editor {
+      position: relative;
+    }
+
+    .ncm-sort-script-preview {
+      position: relative;
+    }
+
+    .ncm-sort-script-manual-button {
+      position: absolute;
+      top: -4px;
+      right: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 0 9px;
+      border: 1px solid #d7e3e1;
+      border-radius: 6px;
+      background: #f7fbfa;
+      color: #347b73;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-script-manual-button:hover,
+    .ncm-sort-script-manual-button.is-open {
+      border-color: #8dbab5;
+      background: #edf6f4;
+      color: #205e58;
+    }
+
+    .ncm-sort-script-manual-button > span {
+      display: inline-grid;
+      width: 15px;
+      height: 15px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-manual {
+      max-height: min(58vh, 520px);
+      overflow-y: auto;
+      margin: 0 0 14px;
+      padding: 13px 14px;
+      border: 1px solid #dce8e5;
+      border-radius: 8px;
+      background: #f7fbfa;
+      color: #566368;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .ncm-sort-script-manual-title {
+      margin-bottom: 8px;
+      color: #263238;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-manual-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      gap: 5px 14px;
+      align-items: baseline;
+    }
+
+    .ncm-sort-script-manual-grid code,
+    .ncm-sort-script-manual pre {
+      color: #286b64;
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-manual p {
+      margin: 0 0 10px;
+      color: #626f74;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-manual p code,
+    .ncm-sort-script-manual li code {
+      color: #286b64;
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-manual ul {
+      display: grid;
+      gap: 5px;
+      margin: 0 0 12px;
+      padding-left: 18px;
+      color: #626f74;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-manual li {
+      padding-left: 2px;
+    }
+
+    .ncm-sort-script-manual pre {
+      margin: 8px 0 0;
+      padding: 7px 9px;
+      border-radius: 5px;
+      background: #edf6f4;
+      white-space: pre-wrap;
+    }
+
+    .ncm-sort-script-manual .ncm-sort-script-manual-note {
+      margin: 10px 0 0;
+      color: #7b878b;
+      font-size: 11px;
+    }
+
     .ncm-sort-script-columns {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -881,68 +996,127 @@ export function installStyles() {
       background: #fff;
     }
 
-    .ncm-sort-script-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 9px;
+    .ncm-sort-script-command-line {
+      margin-top: 14px;
+      padding: 13px 14px 14px;
+      border: 1px solid #e4e9eb;
+      border-radius: 10px;
+      background: #f8fafb;
+      text-align: left;
     }
 
-    .ncm-sort-script-command-line {
-      margin-top: 12px;
-      padding: 10px 12px 11px;
-      border: 1px solid #dfe8e6;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #f7fbfa, #f1f8f6);
-      text-align: left;
+    .ncm-sort-script-command-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .ncm-sort-script-command-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .ncm-sort-script-command-heading .ncm-sort-script-panel-title {
+      margin-bottom: 0;
+      color: #263238;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .ncm-sort-script-command-hint {
+      color: #8a969a;
+      font-size: 11px;
+    }
+
+    .ncm-sort-script-file-button {
+      min-height: 26px;
+      padding: 0 8px;
+      border: 1px solid #d7e3e1;
+      border-radius: 5px;
+      background: transparent;
+      color: #347b73;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-script-file-button:hover {
+      border-color: #8dbab5;
+      background: #edf6f4;
+      color: #205e58;
+    }
+
+    .ncm-sort-script-file-button:disabled {
+      opacity: 0.55;
+      cursor: wait;
     }
 
     .ncm-sort-script-command-input-row {
       display: flex;
       gap: 8px;
       align-items: center;
+      padding: 4px 4px 4px 10px;
+      border: 1px solid #d8e0e2;
+      border-radius: 8px;
+      background: #fff;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .ncm-sort-script-command-input-row::before {
-      color: #5c9a93;
+      color: #2f7d75;
       content: '›';
-      font: 700 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font: 700 20px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input-row:focus-within {
+      border-color: #73a9a3;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.13);
     }
 
     .ncm-sort-script-command-input {
       min-width: 0;
       flex: 1 1 auto;
-      height: 32px;
+      height: 34px;
       box-sizing: border-box;
-      padding: 0 10px;
-      border: 1px solid #d5dddf;
-      border-radius: 6px;
+      padding: 0 2px;
+      border: 0;
+      border-radius: 0;
       outline: none;
       background: #fff;
       color: #263238;
       font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     }
 
-    .ncm-sort-script-command-input:focus {
-      border-color: #5c9a93;
-      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+    .ncm-sort-script-command-input::placeholder {
+      color: #a3adb0;
     }
 
     .ncm-sort-script-command-line .ncm-sort-script-tool-button {
       width: 34px;
       min-height: 34px;
       padding: 0 !important;
-      border-color: #5c9a93;
-      background: #5c9a93;
+      border-color: #2f7d75;
+      border-radius: 6px;
+      background: #2f7d75;
       color: #fff;
       font-size: 19px;
       font-weight: 700;
       line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button span {
+      display: block;
+      transform: translateY(2px);
     }
 
     .ncm-sort-script-command-line .ncm-sort-script-tool-button:hover {
-      border-color: #347b73;
-      background: #347b73;
+      border-color: #256860;
+      background: #256860;
       color: #fff;
     }
 

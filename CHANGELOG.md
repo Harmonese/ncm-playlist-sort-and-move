@@ -4,6 +4,20 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project aims to follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-09-06
+
+### Added
+
+- Added local `.nplc` (NCM Playlist Command) upload and download for playlist editor commands.
+- Added user-facing command help with command syntax, position rules, sorting options, and examples.
+
+### Changed
+
+- Renamed the playlist script menu item and editor title to “歌单编辑器”.
+- Made the song-list editor read-only; changes are now made through the command line or `.nplc` upload.
+- Removed the “从当前歌单重新生成” and “复制脚本” buttons from the editor.
+- Uploaded `.nplc` files are validated before commands are executed sequentially; execution stops when a command fails.
+
 ## [0.9.1] - 2026-09-05
 
 ### Changed

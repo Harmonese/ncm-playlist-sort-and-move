@@ -21,6 +21,73 @@ import {
 } from '../data/playlist-plan.js';
 import { showToast } from '../utils/dom.js';
 
+function getCommandManualHtml() {
+  return `
+    <button id="playlist-script-command-manual" type="button" class="ncm-sort-script-manual-button" aria-expanded="false">
+      <span aria-hidden="true">?</span> 使用帮助
+    </button>
+    <div id="playlist-script-command-manual-content" class="ncm-sort-script-manual" hidden>
+      <div class="ncm-sort-script-manual-title">怎么使用</div>
+      <p>在下方的命令输入框中输入一条命令，按 Enter 或点击回车按钮即可执行。执行结果会立即反映在脚本内容和歌曲预览中；确认写回前，你可以反复尝试和调整。</p>
+
+      <div class="ncm-sort-script-manual-title">添加歌曲</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>song 歌曲ID</code><span>添加一首歌曲</span>
+        <code>song 歌曲ID 位置</code><span>添加到指定位置</span>
+        <code>album 专辑ID</code><span>读取专辑并添加其中的全部歌曲</span>
+        <code>album 专辑ID 位置</code><span>把专辑歌曲添加到指定位置</span>
+      </div>
+
+      <div class="ncm-sort-script-manual-title">删除和调整顺序</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>remove 位置</code><span>删除指定位置的一首歌曲</span>
+        <code>remove 起始位置 结束位置</code><span>删除一段歌曲</span>
+        <code>move 起始位置 结束位置 目标位置</code><span>移动一段歌曲；目标为 0 表示移到最前</span>
+        <code>swap 位置1 位置2</code><span>交换两首歌曲的位置</span>
+        <code>clear</code><span>清空当前编辑结果</span>
+      </div>
+
+      <div class="ncm-sort-script-manual-title">排序</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>sort title</code><span>按歌曲标题排序（使用标题排序设置）</span>
+        <code>sort date [asc|desc]</code><span>按发行日期排序，默认从新到旧</span>
+        <code>sort artist [name|original] [date|nodate]</code><span>按歌手排序，可控制歌手分组和组内日期</span>
+        <code>sort heat 指标 [asc|desc]</code><span>按热度排序：popularity、red 或 comments</span>
+        <code>sort random</code><span>随机打乱顺序</span>
+      </div>
+      <p>任何排序命令最后都可以加“起始位置 结束位置”，只排序这一段。例如：<code>sort title 2 10</code>。</p>
+
+      <div class="ncm-sort-script-manual-title">位置怎么计算？</div>
+      <ul>
+        <li><strong>添加位置</strong>从 0 开始：<code>0</code> 是最前面，<code>1</code> 是第一首歌后面。</li>
+        <li><strong>删除、移动、交换和排序</strong>使用从 1 开始的歌曲序号，并且包含起点和终点。</li>
+        <li>不写添加位置时，如果左侧预览中选中了歌曲，就会插入到选中歌曲后面；没有选中歌曲时添加到末尾。</li>
+        <li>不写排序范围时，会对整个歌单排序。</li>
+      </ul>
+
+      <div class="ncm-sort-script-manual-title">可以直接试试</div>
+      <pre>song 123
+album 456 0
+sort date desc
+sort heat popularity desc 1 20
+move 2 5 0
+remove 8 10</pre>
+      <p class="ncm-sort-script-manual-note">其中的歌曲 ID 和专辑 ID 需要替换成网易云音乐实际的数字 ID。命令只在当前编辑窗口中修改顺序，最后点击“解析预览”并确认后才会写回歌单。</p>
+    </div>
+  `;
+}
+
+function bindCommandManual() {
+  const manualButton = document.getElementById('playlist-script-command-manual');
+  const manual = document.getElementById('playlist-script-command-manual-content');
+  manualButton?.addEventListener('click', () => {
+    const isOpen = !manual.hidden;
+    manual.hidden = isOpen;
+    manualButton.setAttribute('aria-expanded', String(!isOpen));
+    manualButton.classList.toggle('is-open', !isOpen);
+  });
+}
+
 function getVisibleTextCategories(categoryIds) {
   const requestedIds = Array.isArray(categoryIds)
     ? new Set(categoryIds)
@@ -726,7 +793,6 @@ export function showHeatSortDialog(savedConfig) {
 export function showPlaylistScriptDialog(scriptText, {
   playlistName = '当前歌单',
   currentCount = 0,
-  currentScript = scriptText,
   currentItems = [],
   resolveScript = null,
   resolveCommand = null,
@@ -734,9 +800,10 @@ export function showPlaylistScriptDialog(scriptText, {
   warning = ''
 } = {}) {
   return Swal.fire({
-    title: '歌单编排脚本',
+    title: '歌单编辑器',
     html: `
       <div class="ncm-sort-script-editor">
+        ${getCommandManualHtml()}
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
           <p class="ncm-sort-detected">当前歌单：${currentCount} 首歌曲</p>
@@ -752,20 +819,24 @@ export function showPlaylistScriptDialog(scriptText, {
           <div class="ncm-sort-script-command-panel">
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
-              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
-            </div>
-            <div class="ncm-sort-script-toolbar">
-              <button id="playlist-script-reset" type="button" class="ncm-sort-script-tool-button">从当前歌单重新生成</button>
-              <button id="playlist-script-copy" type="button" class="ncm-sort-script-tool-button">复制脚本</button>
+              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false" readonly aria-readonly="true">${escapeHtml(scriptText)}</textarea>
             </div>
           </div>
         </div>
-        <div class="ncm-sort-script-command-line">
-          <div class="ncm-sort-script-panel-title">命令行</div>
-          <div class="ncm-sort-script-command-input-row">
-            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off">
-            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="执行命令" aria-label="执行命令">↵</button>
+          <div class="ncm-sort-script-command-line">
+          <div class="ncm-sort-script-command-heading">
+            <div class="ncm-sort-script-panel-title">命令行</div>
+            <div class="ncm-sort-script-command-actions">
+              <span class="ncm-sort-script-command-hint">Enter 执行</span>
+              <button id="playlist-script-upload" type="button" class="ncm-sort-script-file-button">上传 .nplc</button>
+              <button id="playlist-script-download" type="button" class="ncm-sort-script-file-button">下载 .nplc</button>
+            </div>
           </div>
+          <div class="ncm-sort-script-command-input-row">
+            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off" placeholder="例如：song 123 或 sort title">
+            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="执行命令" aria-label="执行命令"><span aria-hidden="true">↵</span></button>
+          </div>
+          <input id="playlist-script-file-input" type="file" accept=".nplc,text/plain" hidden>
         </div>
       </div>
     `,
@@ -779,12 +850,17 @@ export function showPlaylistScriptDialog(scriptText, {
       popup: 'ncm-sort-popup ncm-sort-script-popup'
     },
     didOpen: () => {
+      bindCommandManual();
       const editor = document.getElementById('playlist-script-editor');
       const preview = document.getElementById('playlist-script-live-preview');
       const summary = document.getElementById('playlist-script-live-summary');
       const activeLine = document.getElementById('playlist-script-active-line');
       const commandInput = document.getElementById('playlist-script-command-input');
       const appendButton = document.getElementById('playlist-script-command-append');
+      const uploadButton = document.getElementById('playlist-script-upload');
+      const downloadButton = document.getElementById('playlist-script-download');
+      const fileInput = document.getElementById('playlist-script-file-input');
+      const commandHistory = [];
       let updateTimer = 0;
       let updateSequence = 0;
       let isScrollSyncing = false;
@@ -1016,14 +1092,14 @@ export function showPlaylistScriptDialog(scriptText, {
         }
       };
 
-      const appendCommand = async () => {
+      const appendCommand = async (rawCommandText = commandInput.value, { silent = false } = {}) => {
         let command;
         try {
-          command = parseCommandLine(commandInput.value);
+          command = parseCommandLine(rawCommandText);
         } catch (error) {
           showToast(error.message || String(error));
           commandInput.focus();
-          return;
+          return false;
         }
 
         appendButton.disabled = true;
@@ -1043,8 +1119,9 @@ export function showPlaylistScriptDialog(scriptText, {
             commandInput.value = '';
             editor.focus();
             updatePreview();
-            showToast('已清空执行方案');
-            return;
+            commandHistory.push(rawCommandText.trim());
+            if (!silent) showToast('已清空当前编辑结果');
+            return true;
           }
 
           const selectedIndex = command.position == null && selectedSourceLine == null
@@ -1065,6 +1142,7 @@ export function showPlaylistScriptDialog(scriptText, {
           commandInput.value = '';
           editor.focus();
           updatePreview();
+          commandHistory.push(rawCommandText.trim());
           const successMessage = command.type === 'album'
             ? `已展开并插入 ${resolved.songIds.length} 首歌曲`
             : command.type === 'song'
@@ -1076,10 +1154,12 @@ export function showPlaylistScriptDialog(scriptText, {
                   : command.type === 'move'
                     ? '已移动指定歌曲'
                     : '已交换歌曲位置';
-          showToast(successMessage);
+          if (!silent) showToast(successMessage);
+          return true;
         } catch (error) {
           showToast(error.message || String(error));
           commandInput.focus();
+          return false;
         } finally {
           appendButton.disabled = false;
           commandInput.disabled = false;
@@ -1092,27 +1172,72 @@ export function showPlaylistScriptDialog(scriptText, {
         updateTimer = setTimeout(updatePreview, 280);
       });
 
-      document.getElementById('playlist-script-reset').addEventListener('click', () => {
-        editor.value = currentScript;
-        editor.focus();
-        updatePreview();
-      });
-      document.getElementById('playlist-script-copy').addEventListener('click', async () => {
-        try {
-          await navigator.clipboard.writeText(editor.value);
-          editor.focus();
-          showToast('脚本已复制到剪贴板');
-        } catch (error) {
-          editor.focus();
-          editor.select();
-          showToast('无法直接访问剪贴板，已选中脚本内容，请手动复制');
-        }
-      });
       appendButton.addEventListener('click', appendCommand);
       commandInput.addEventListener('keydown', (event) => {
         if (event.key !== 'Enter') return;
         event.preventDefault();
         appendCommand();
+      });
+      uploadButton.addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', async () => {
+        const file = fileInput.files?.[0];
+        fileInput.value = '';
+        if (!file) return;
+        let text;
+        try {
+          text = await file.text();
+        } catch (error) {
+          showToast(`无法读取文件：${error.message || String(error)}`);
+          return;
+        }
+        const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+        const commands = [];
+        try {
+          lines.forEach((line, index) => {
+            const trimmed = line.trim();
+            if (!trimmed || trimmed.startsWith('#')) return;
+            commands.push({ text: trimmed, line: index + 1 });
+            parseCommandLine(trimmed);
+          });
+        } catch (error) {
+          const lineNumber = commands.at(-1)?.line || 1;
+          showToast(`文件第 ${lineNumber} 行无法识别：${error.message || String(error)}`);
+          return;
+        }
+        if (!commands.length) {
+          showToast('文件中没有可执行的命令');
+          return;
+        }
+        uploadButton.disabled = true;
+        downloadButton.disabled = true;
+        try {
+          for (const item of commands) {
+            const success = await appendCommand(item.text, { silent: true });
+            if (!success) {
+              showToast(`文件第 ${item.line} 行执行失败，后续命令已停止`);
+              break;
+            }
+          }
+        } finally {
+          uploadButton.disabled = false;
+          downloadButton.disabled = false;
+        }
+      });
+      downloadButton.addEventListener('click', () => {
+        if (!commandHistory.length) {
+          showToast('当前还没有可下载的命令');
+          return;
+        }
+        const content = `# ncm-playlist-command: 1\n${commandHistory.join('\n')}\n`;
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const filename = `${(playlistName || '歌单').replace(/[\\/:*?"<>|]/g, '_')}.nplc`;
+        link.href = url;
+        link.download = filename;
+        link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+        showToast(`已下载 ${filename}`);
       });
       preview.addEventListener('click', (event) => {
         const row = event.target.closest('[data-source-line]');
@@ -1177,6 +1302,7 @@ export function showPlaylistScriptPreviewDialog({
     title: '预览歌单编排',
     html: `
       <div class="ncm-sort-script-preview">
+        ${getCommandManualHtml()}
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
           ${warning}
@@ -1196,7 +1322,10 @@ export function showPlaylistScriptPreviewDialog({
     confirmButtonText: '确认写回',
     cancelButtonText: '返回编辑',
     focusConfirm: false,
-    customClass: externalChange ? dangerSwalClasses : swalClasses
+    customClass: externalChange ? dangerSwalClasses : swalClasses,
+    didOpen: () => {
+      bindCommandManual();
+    }
   });
 }
 

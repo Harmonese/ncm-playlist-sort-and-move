@@ -121,6 +121,25 @@ test('playlist script dialog executes commands through the browser UI', async ()
   await page.locator('#test-cancel').click();
 });
 
+test('right-hand script panel is read-only while the command line remains editable', async () => {
+  await page.reload();
+  await page.waitForFunction(() => window.__browserHarnessReady === true);
+  await openDialog();
+
+  const editor = page.locator('#playlist-script-editor');
+  const commandInput = page.locator('#playlist-script-command-input');
+  const originalScript = await editor.inputValue();
+
+  assert.equal(await editor.getAttribute('readonly'), '');
+  await editor.click();
+  await editor.press('End');
+  await editor.type('song 9');
+  assert.equal(await editor.inputValue(), originalScript);
+  assert.equal(await commandInput.isEditable(), true);
+
+  await page.locator('#test-cancel').click();
+});
+
 test('function menu exposes random sorting', async () => {
   await page.reload();
   await page.waitForFunction(() => window.__browserHarnessReady === true);
@@ -226,14 +245,18 @@ test('confirmation rejects album commands in the persisted script document', asy
   await openDialog();
 
   const editor = page.locator('#playlist-script-editor');
-  await editor.fill('album 42');
+  await page.evaluate(() => {
+    document.querySelector('#playlist-script-editor').value = 'album 42';
+  });
   await page.locator('#test-confirm').click();
   await page.waitForFunction(() => {
     return document.querySelector('#test-validation-message')?.textContent.includes('只支持 song');
   });
   assert.equal(await page.locator('#test-swal-dialog').count(), 1);
 
-  await editor.fill('song 1');
+  await page.evaluate(() => {
+    document.querySelector('#playlist-script-editor').value = 'song 1';
+  });
   await page.locator('#test-confirm').click();
   await page.waitForFunction(() => window.__lastDialogResult?.isConfirmed === true);
   assert.equal(await page.locator('#test-swal-dialog').count(), 0);

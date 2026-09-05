@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         网易云音乐歌单排序
 // @namespace    https://github.com/Harmonese/ncm-playlist-sort-and-move
-// @version      0.9.1
-// @description  网易云音乐网页版歌单管理工具，支持歌单编排脚本、排序、随机排序、批量移动和批量删除歌曲
+// @version      0.9.2
+// @description  网易云音乐网页版歌单管理工具，支持歌单编辑器、排序、随机排序、批量移动和批量删除歌曲
 // @author       Harmonese
 // @license      MIT
 // @icon         https://raw.githubusercontent.com/Harmonese/ncm-playlist-sort-and-move/main/assets/icon.png
@@ -1045,6 +1045,121 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       text-align: left;
     }
 
+    .ncm-sort-script-editor {
+      position: relative;
+    }
+
+    .ncm-sort-script-preview {
+      position: relative;
+    }
+
+    .ncm-sort-script-manual-button {
+      position: absolute;
+      top: -4px;
+      right: 0;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      min-height: 28px;
+      padding: 0 9px;
+      border: 1px solid #d7e3e1;
+      border-radius: 6px;
+      background: #f7fbfa;
+      color: #347b73;
+      font-size: 12px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-script-manual-button:hover,
+    .ncm-sort-script-manual-button.is-open {
+      border-color: #8dbab5;
+      background: #edf6f4;
+      color: #205e58;
+    }
+
+    .ncm-sort-script-manual-button > span {
+      display: inline-grid;
+      width: 15px;
+      height: 15px;
+      place-items: center;
+      border: 1px solid currentColor;
+      border-radius: 50%;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-manual {
+      max-height: min(58vh, 520px);
+      overflow-y: auto;
+      margin: 0 0 14px;
+      padding: 13px 14px;
+      border: 1px solid #dce8e5;
+      border-radius: 8px;
+      background: #f7fbfa;
+      color: #566368;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+
+    .ncm-sort-script-manual-title {
+      margin-bottom: 8px;
+      color: #263238;
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .ncm-sort-script-manual-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+      gap: 5px 14px;
+      align-items: baseline;
+    }
+
+    .ncm-sort-script-manual-grid code,
+    .ncm-sort-script-manual pre {
+      color: #286b64;
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-manual p {
+      margin: 0 0 10px;
+      color: #626f74;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-manual p code,
+    .ncm-sort-script-manual li code {
+      color: #286b64;
+      font: 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-manual ul {
+      display: grid;
+      gap: 5px;
+      margin: 0 0 12px;
+      padding-left: 18px;
+      color: #626f74;
+      font-size: 12px;
+    }
+
+    .ncm-sort-script-manual li {
+      padding-left: 2px;
+    }
+
+    .ncm-sort-script-manual pre {
+      margin: 8px 0 0;
+      padding: 7px 9px;
+      border-radius: 5px;
+      background: #edf6f4;
+      white-space: pre-wrap;
+    }
+
+    .ncm-sort-script-manual .ncm-sort-script-manual-note {
+      margin: 10px 0 0;
+      color: #7b878b;
+      font-size: 11px;
+    }
+
     .ncm-sort-script-columns {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
@@ -1357,68 +1472,127 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       background: #fff;
     }
 
-    .ncm-sort-script-toolbar {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 9px;
+    .ncm-sort-script-command-line {
+      margin-top: 14px;
+      padding: 13px 14px 14px;
+      border: 1px solid #e4e9eb;
+      border-radius: 10px;
+      background: #f8fafb;
+      text-align: left;
     }
 
-    .ncm-sort-script-command-line {
-      margin-top: 12px;
-      padding: 10px 12px 11px;
-      border: 1px solid #dfe8e6;
-      border-radius: 8px;
-      background: linear-gradient(135deg, #f7fbfa, #f1f8f6);
-      text-align: left;
+    .ncm-sort-script-command-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+
+    .ncm-sort-script-command-actions {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+
+    .ncm-sort-script-command-heading .ncm-sort-script-panel-title {
+      margin-bottom: 0;
+      color: #263238;
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+
+    .ncm-sort-script-command-hint {
+      color: #8a969a;
+      font-size: 11px;
+    }
+
+    .ncm-sort-script-file-button {
+      min-height: 26px;
+      padding: 0 8px;
+      border: 1px solid #d7e3e1;
+      border-radius: 5px;
+      background: transparent;
+      color: #347b73;
+      font-size: 11px;
+      cursor: pointer;
+    }
+
+    .ncm-sort-script-file-button:hover {
+      border-color: #8dbab5;
+      background: #edf6f4;
+      color: #205e58;
+    }
+
+    .ncm-sort-script-file-button:disabled {
+      opacity: 0.55;
+      cursor: wait;
     }
 
     .ncm-sort-script-command-input-row {
       display: flex;
       gap: 8px;
       align-items: center;
+      padding: 4px 4px 4px 10px;
+      border: 1px solid #d8e0e2;
+      border-radius: 8px;
+      background: #fff;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
     }
 
     .ncm-sort-script-command-input-row::before {
-      color: #5c9a93;
+      color: #2f7d75;
       content: '\u203A';
-      font: 700 22px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+      font: 700 20px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    }
+
+    .ncm-sort-script-command-input-row:focus-within {
+      border-color: #73a9a3;
+      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.13);
     }
 
     .ncm-sort-script-command-input {
       min-width: 0;
       flex: 1 1 auto;
-      height: 32px;
+      height: 34px;
       box-sizing: border-box;
-      padding: 0 10px;
-      border: 1px solid #d5dddf;
-      border-radius: 6px;
+      padding: 0 2px;
+      border: 0;
+      border-radius: 0;
       outline: none;
       background: #fff;
       color: #263238;
       font: 13px ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     }
 
-    .ncm-sort-script-command-input:focus {
-      border-color: #5c9a93;
-      box-shadow: 0 0 0 3px rgba(92, 154, 147, 0.16);
+    .ncm-sort-script-command-input::placeholder {
+      color: #a3adb0;
     }
 
     .ncm-sort-script-command-line .ncm-sort-script-tool-button {
       width: 34px;
       min-height: 34px;
       padding: 0 !important;
-      border-color: #5c9a93;
-      background: #5c9a93;
+      border-color: #2f7d75;
+      border-radius: 6px;
+      background: #2f7d75;
       color: #fff;
       font-size: 19px;
       font-weight: 700;
       line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .ncm-sort-script-command-line .ncm-sort-script-tool-button span {
+      display: block;
+      transform: translateY(2px);
     }
 
     .ncm-sort-script-command-line .ncm-sort-script-tool-button:hover {
-      border-color: #347b73;
-      background: #347b73;
+      border-color: #256860;
+      background: #256860;
       color: #fff;
     }
 
@@ -2470,6 +2644,71 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   }
 
   // src/ui/dialogs.js
+  function getCommandManualHtml() {
+    return `
+    <button id="playlist-script-command-manual" type="button" class="ncm-sort-script-manual-button" aria-expanded="false">
+      <span aria-hidden="true">?</span> \u4F7F\u7528\u5E2E\u52A9
+    </button>
+    <div id="playlist-script-command-manual-content" class="ncm-sort-script-manual" hidden>
+      <div class="ncm-sort-script-manual-title">\u600E\u4E48\u4F7F\u7528</div>
+      <p>\u5728\u4E0B\u65B9\u7684\u547D\u4EE4\u8F93\u5165\u6846\u4E2D\u8F93\u5165\u4E00\u6761\u547D\u4EE4\uFF0C\u6309 Enter \u6216\u70B9\u51FB\u56DE\u8F66\u6309\u94AE\u5373\u53EF\u6267\u884C\u3002\u6267\u884C\u7ED3\u679C\u4F1A\u7ACB\u5373\u53CD\u6620\u5728\u811A\u672C\u5185\u5BB9\u548C\u6B4C\u66F2\u9884\u89C8\u4E2D\uFF1B\u786E\u8BA4\u5199\u56DE\u524D\uFF0C\u4F60\u53EF\u4EE5\u53CD\u590D\u5C1D\u8BD5\u548C\u8C03\u6574\u3002</p>
+
+      <div class="ncm-sort-script-manual-title">\u6DFB\u52A0\u6B4C\u66F2</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>song \u6B4C\u66F2ID</code><span>\u6DFB\u52A0\u4E00\u9996\u6B4C\u66F2</span>
+        <code>song \u6B4C\u66F2ID \u4F4D\u7F6E</code><span>\u6DFB\u52A0\u5230\u6307\u5B9A\u4F4D\u7F6E</span>
+        <code>album \u4E13\u8F91ID</code><span>\u8BFB\u53D6\u4E13\u8F91\u5E76\u6DFB\u52A0\u5176\u4E2D\u7684\u5168\u90E8\u6B4C\u66F2</span>
+        <code>album \u4E13\u8F91ID \u4F4D\u7F6E</code><span>\u628A\u4E13\u8F91\u6B4C\u66F2\u6DFB\u52A0\u5230\u6307\u5B9A\u4F4D\u7F6E</span>
+      </div>
+
+      <div class="ncm-sort-script-manual-title">\u5220\u9664\u548C\u8C03\u6574\u987A\u5E8F</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>remove \u4F4D\u7F6E</code><span>\u5220\u9664\u6307\u5B9A\u4F4D\u7F6E\u7684\u4E00\u9996\u6B4C\u66F2</span>
+        <code>remove \u8D77\u59CB\u4F4D\u7F6E \u7ED3\u675F\u4F4D\u7F6E</code><span>\u5220\u9664\u4E00\u6BB5\u6B4C\u66F2</span>
+        <code>move \u8D77\u59CB\u4F4D\u7F6E \u7ED3\u675F\u4F4D\u7F6E \u76EE\u6807\u4F4D\u7F6E</code><span>\u79FB\u52A8\u4E00\u6BB5\u6B4C\u66F2\uFF1B\u76EE\u6807\u4E3A 0 \u8868\u793A\u79FB\u5230\u6700\u524D</span>
+        <code>swap \u4F4D\u7F6E1 \u4F4D\u7F6E2</code><span>\u4EA4\u6362\u4E24\u9996\u6B4C\u66F2\u7684\u4F4D\u7F6E</span>
+        <code>clear</code><span>\u6E05\u7A7A\u5F53\u524D\u7F16\u8F91\u7ED3\u679C</span>
+      </div>
+
+      <div class="ncm-sort-script-manual-title">\u6392\u5E8F</div>
+      <div class="ncm-sort-script-manual-grid">
+        <code>sort title</code><span>\u6309\u6B4C\u66F2\u6807\u9898\u6392\u5E8F\uFF08\u4F7F\u7528\u6807\u9898\u6392\u5E8F\u8BBE\u7F6E\uFF09</span>
+        <code>sort date [asc|desc]</code><span>\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F\uFF0C\u9ED8\u8BA4\u4ECE\u65B0\u5230\u65E7</span>
+        <code>sort artist [name|original] [date|nodate]</code><span>\u6309\u6B4C\u624B\u6392\u5E8F\uFF0C\u53EF\u63A7\u5236\u6B4C\u624B\u5206\u7EC4\u548C\u7EC4\u5185\u65E5\u671F</span>
+        <code>sort heat \u6307\u6807 [asc|desc]</code><span>\u6309\u70ED\u5EA6\u6392\u5E8F\uFF1Apopularity\u3001red \u6216 comments</span>
+        <code>sort random</code><span>\u968F\u673A\u6253\u4E71\u987A\u5E8F</span>
+      </div>
+      <p>\u4EFB\u4F55\u6392\u5E8F\u547D\u4EE4\u6700\u540E\u90FD\u53EF\u4EE5\u52A0\u201C\u8D77\u59CB\u4F4D\u7F6E \u7ED3\u675F\u4F4D\u7F6E\u201D\uFF0C\u53EA\u6392\u5E8F\u8FD9\u4E00\u6BB5\u3002\u4F8B\u5982\uFF1A<code>sort title 2 10</code>\u3002</p>
+
+      <div class="ncm-sort-script-manual-title">\u4F4D\u7F6E\u600E\u4E48\u8BA1\u7B97\uFF1F</div>
+      <ul>
+        <li><strong>\u6DFB\u52A0\u4F4D\u7F6E</strong>\u4ECE 0 \u5F00\u59CB\uFF1A<code>0</code> \u662F\u6700\u524D\u9762\uFF0C<code>1</code> \u662F\u7B2C\u4E00\u9996\u6B4C\u540E\u9762\u3002</li>
+        <li><strong>\u5220\u9664\u3001\u79FB\u52A8\u3001\u4EA4\u6362\u548C\u6392\u5E8F</strong>\u4F7F\u7528\u4ECE 1 \u5F00\u59CB\u7684\u6B4C\u66F2\u5E8F\u53F7\uFF0C\u5E76\u4E14\u5305\u542B\u8D77\u70B9\u548C\u7EC8\u70B9\u3002</li>
+        <li>\u4E0D\u5199\u6DFB\u52A0\u4F4D\u7F6E\u65F6\uFF0C\u5982\u679C\u5DE6\u4FA7\u9884\u89C8\u4E2D\u9009\u4E2D\u4E86\u6B4C\u66F2\uFF0C\u5C31\u4F1A\u63D2\u5165\u5230\u9009\u4E2D\u6B4C\u66F2\u540E\u9762\uFF1B\u6CA1\u6709\u9009\u4E2D\u6B4C\u66F2\u65F6\u6DFB\u52A0\u5230\u672B\u5C3E\u3002</li>
+        <li>\u4E0D\u5199\u6392\u5E8F\u8303\u56F4\u65F6\uFF0C\u4F1A\u5BF9\u6574\u4E2A\u6B4C\u5355\u6392\u5E8F\u3002</li>
+      </ul>
+
+      <div class="ncm-sort-script-manual-title">\u53EF\u4EE5\u76F4\u63A5\u8BD5\u8BD5</div>
+      <pre>song 123
+album 456 0
+sort date desc
+sort heat popularity desc 1 20
+move 2 5 0
+remove 8 10</pre>
+      <p class="ncm-sort-script-manual-note">\u5176\u4E2D\u7684\u6B4C\u66F2 ID \u548C\u4E13\u8F91 ID \u9700\u8981\u66FF\u6362\u6210\u7F51\u6613\u4E91\u97F3\u4E50\u5B9E\u9645\u7684\u6570\u5B57 ID\u3002\u547D\u4EE4\u53EA\u5728\u5F53\u524D\u7F16\u8F91\u7A97\u53E3\u4E2D\u4FEE\u6539\u987A\u5E8F\uFF0C\u6700\u540E\u70B9\u51FB\u201C\u89E3\u6790\u9884\u89C8\u201D\u5E76\u786E\u8BA4\u540E\u624D\u4F1A\u5199\u56DE\u6B4C\u5355\u3002</p>
+    </div>
+  `;
+  }
+  function bindCommandManual() {
+    const manualButton = document.getElementById("playlist-script-command-manual");
+    const manual = document.getElementById("playlist-script-command-manual-content");
+    manualButton?.addEventListener("click", () => {
+      const isOpen = !manual.hidden;
+      manual.hidden = isOpen;
+      manualButton.setAttribute("aria-expanded", String(!isOpen));
+      manualButton.classList.toggle("is-open", !isOpen);
+    });
+  }
   function getVisibleTextCategories(categoryIds) {
     const requestedIds = Array.isArray(categoryIds) ? new Set(categoryIds) : new Set(TITLE_CATEGORIES.map((category) => category.id));
     const categories = TITLE_CATEGORIES.filter((category) => requestedIds.has(category.id));
@@ -3093,7 +3332,6 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
   function showPlaylistScriptDialog(scriptText, {
     playlistName = "\u5F53\u524D\u6B4C\u5355",
     currentCount = 0,
-    currentScript = scriptText,
     currentItems = [],
     resolveScript = null,
     resolveCommand: resolveCommand2 = null,
@@ -3101,9 +3339,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
     warning = ""
   } = {}) {
     return Swal.fire({
-      title: "\u6B4C\u5355\u7F16\u6392\u811A\u672C",
+      title: "\u6B4C\u5355\u7F16\u8F91\u5668",
       html: `
       <div class="ncm-sort-script-editor">
+        ${getCommandManualHtml()}
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
           <p class="ncm-sort-detected">\u5F53\u524D\u6B4C\u5355\uFF1A${currentCount} \u9996\u6B4C\u66F2</p>
@@ -3119,20 +3358,24 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           <div class="ncm-sort-script-command-panel">
             <div class="ncm-sort-script-scroll-wrap">
               <div id="playlist-script-active-line" class="ncm-sort-script-active-line" aria-hidden="true"></div>
-              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false">${escapeHtml(scriptText)}</textarea>
-            </div>
-            <div class="ncm-sort-script-toolbar">
-              <button id="playlist-script-reset" type="button" class="ncm-sort-script-tool-button">\u4ECE\u5F53\u524D\u6B4C\u5355\u91CD\u65B0\u751F\u6210</button>
-              <button id="playlist-script-copy" type="button" class="ncm-sort-script-tool-button">\u590D\u5236\u811A\u672C</button>
+              <textarea id="playlist-script-editor" class="ncm-sort-script-textarea" spellcheck="false" readonly aria-readonly="true">${escapeHtml(scriptText)}</textarea>
             </div>
           </div>
         </div>
-        <div class="ncm-sort-script-command-line">
-          <div class="ncm-sort-script-panel-title">\u547D\u4EE4\u884C</div>
-          <div class="ncm-sort-script-command-input-row">
-            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off">
-            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="\u6267\u884C\u547D\u4EE4" aria-label="\u6267\u884C\u547D\u4EE4">\u21B5</button>
+          <div class="ncm-sort-script-command-line">
+          <div class="ncm-sort-script-command-heading">
+            <div class="ncm-sort-script-panel-title">\u547D\u4EE4\u884C</div>
+            <div class="ncm-sort-script-command-actions">
+              <span class="ncm-sort-script-command-hint">Enter \u6267\u884C</span>
+              <button id="playlist-script-upload" type="button" class="ncm-sort-script-file-button">\u4E0A\u4F20 .nplc</button>
+              <button id="playlist-script-download" type="button" class="ncm-sort-script-file-button">\u4E0B\u8F7D .nplc</button>
+            </div>
           </div>
+          <div class="ncm-sort-script-command-input-row">
+            <input id="playlist-script-command-input" class="ncm-sort-script-command-input" type="text" spellcheck="false" autocomplete="off" placeholder="\u4F8B\u5982\uFF1Asong 123 \u6216 sort title">
+            <button id="playlist-script-command-append" type="button" class="ncm-sort-script-tool-button" title="\u6267\u884C\u547D\u4EE4" aria-label="\u6267\u884C\u547D\u4EE4"><span aria-hidden="true">\u21B5</span></button>
+          </div>
+          <input id="playlist-script-file-input" type="file" accept=".nplc,text/plain" hidden>
         </div>
       </div>
     `,
@@ -3146,12 +3389,17 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
         popup: "ncm-sort-popup ncm-sort-script-popup"
       },
       didOpen: () => {
+        bindCommandManual();
         const editor = document.getElementById("playlist-script-editor");
         const preview = document.getElementById("playlist-script-live-preview");
         const summary = document.getElementById("playlist-script-live-summary");
         const activeLine = document.getElementById("playlist-script-active-line");
         const commandInput = document.getElementById("playlist-script-command-input");
         const appendButton = document.getElementById("playlist-script-command-append");
+        const uploadButton = document.getElementById("playlist-script-upload");
+        const downloadButton = document.getElementById("playlist-script-download");
+        const fileInput = document.getElementById("playlist-script-file-input");
+        const commandHistory = [];
         let updateTimer = 0;
         let updateSequence = 0;
         let isScrollSyncing = false;
@@ -3349,14 +3597,14 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             if (sequence === updateSequence) renderPreview({ error: error.message || String(error) });
           }
         };
-        const appendCommand = async () => {
+        const appendCommand = async (rawCommandText = commandInput.value, { silent = false } = {}) => {
           let command;
           try {
-            command = parseCommandLine(commandInput.value);
+            command = parseCommandLine(rawCommandText);
           } catch (error) {
             showToast(error.message || String(error));
             commandInput.focus();
-            return;
+            return false;
           }
           appendButton.disabled = true;
           commandInput.disabled = true;
@@ -3372,8 +3620,9 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
               commandInput.value = "";
               editor.focus();
               updatePreview();
-              showToast("\u5DF2\u6E05\u7A7A\u6267\u884C\u65B9\u6848");
-              return;
+              commandHistory.push(rawCommandText.trim());
+              if (!silent) showToast("\u5DF2\u6E05\u7A7A\u5F53\u524D\u7F16\u8F91\u7ED3\u679C");
+              return true;
             }
             const selectedIndex = command.position == null && selectedSourceLine == null ? -1 : currentCommands.findIndex((item) => item.line === selectedSourceLine);
             if (command.type === "album") showToast(`\u6B63\u5728\u8BFB\u53D6\u4E13\u8F91 ${command.id}...`);
@@ -3389,11 +3638,14 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
             commandInput.value = "";
             editor.focus();
             updatePreview();
+            commandHistory.push(rawCommandText.trim());
             const successMessage = command.type === "album" ? `\u5DF2\u5C55\u5F00\u5E76\u63D2\u5165 ${resolved.songIds.length} \u9996\u6B4C\u66F2` : command.type === "song" ? "\u5DF2\u63D2\u5165 1 \u9996\u6B4C\u66F2" : command.type === "sort" ? "\u5DF2\u5B8C\u6210\u6392\u5E8F" : command.type === "remove" ? "\u5DF2\u5220\u9664\u6307\u5B9A\u6B4C\u66F2" : command.type === "move" ? "\u5DF2\u79FB\u52A8\u6307\u5B9A\u6B4C\u66F2" : "\u5DF2\u4EA4\u6362\u6B4C\u66F2\u4F4D\u7F6E";
-            showToast(successMessage);
+            if (!silent) showToast(successMessage);
+            return true;
           } catch (error) {
             showToast(error.message || String(error));
             commandInput.focus();
+            return false;
           } finally {
             appendButton.disabled = false;
             commandInput.disabled = false;
@@ -3404,27 +3656,74 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
           clearTimeout(updateTimer);
           updateTimer = setTimeout(updatePreview, 280);
         });
-        document.getElementById("playlist-script-reset").addEventListener("click", () => {
-          editor.value = currentScript;
-          editor.focus();
-          updatePreview();
-        });
-        document.getElementById("playlist-script-copy").addEventListener("click", async () => {
-          try {
-            await navigator.clipboard.writeText(editor.value);
-            editor.focus();
-            showToast("\u811A\u672C\u5DF2\u590D\u5236\u5230\u526A\u8D34\u677F");
-          } catch (error) {
-            editor.focus();
-            editor.select();
-            showToast("\u65E0\u6CD5\u76F4\u63A5\u8BBF\u95EE\u526A\u8D34\u677F\uFF0C\u5DF2\u9009\u4E2D\u811A\u672C\u5185\u5BB9\uFF0C\u8BF7\u624B\u52A8\u590D\u5236");
-          }
-        });
         appendButton.addEventListener("click", appendCommand);
         commandInput.addEventListener("keydown", (event) => {
           if (event.key !== "Enter") return;
           event.preventDefault();
           appendCommand();
+        });
+        uploadButton.addEventListener("click", () => fileInput.click());
+        fileInput.addEventListener("change", async () => {
+          const file = fileInput.files?.[0];
+          fileInput.value = "";
+          if (!file) return;
+          let text;
+          try {
+            text = await file.text();
+          } catch (error) {
+            showToast(`\u65E0\u6CD5\u8BFB\u53D6\u6587\u4EF6\uFF1A${error.message || String(error)}`);
+            return;
+          }
+          const lines = text.replace(/^\uFEFF/, "").split(/\r?\n/);
+          const commands = [];
+          try {
+            lines.forEach((line, index) => {
+              const trimmed = line.trim();
+              if (!trimmed || trimmed.startsWith("#")) return;
+              commands.push({ text: trimmed, line: index + 1 });
+              parseCommandLine(trimmed);
+            });
+          } catch (error) {
+            const lineNumber = commands.at(-1)?.line || 1;
+            showToast(`\u6587\u4EF6\u7B2C ${lineNumber} \u884C\u65E0\u6CD5\u8BC6\u522B\uFF1A${error.message || String(error)}`);
+            return;
+          }
+          if (!commands.length) {
+            showToast("\u6587\u4EF6\u4E2D\u6CA1\u6709\u53EF\u6267\u884C\u7684\u547D\u4EE4");
+            return;
+          }
+          uploadButton.disabled = true;
+          downloadButton.disabled = true;
+          try {
+            for (const item of commands) {
+              const success = await appendCommand(item.text, { silent: true });
+              if (!success) {
+                showToast(`\u6587\u4EF6\u7B2C ${item.line} \u884C\u6267\u884C\u5931\u8D25\uFF0C\u540E\u7EED\u547D\u4EE4\u5DF2\u505C\u6B62`);
+                break;
+              }
+            }
+          } finally {
+            uploadButton.disabled = false;
+            downloadButton.disabled = false;
+          }
+        });
+        downloadButton.addEventListener("click", () => {
+          if (!commandHistory.length) {
+            showToast("\u5F53\u524D\u8FD8\u6CA1\u6709\u53EF\u4E0B\u8F7D\u7684\u547D\u4EE4");
+            return;
+          }
+          const content = `# ncm-playlist-command: 1
+${commandHistory.join("\n")}
+`;
+          const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement("a");
+          const filename = `${(playlistName || "\u6B4C\u5355").replace(/[\\/:*?"<>|]/g, "_")}.nplc`;
+          link.href = url;
+          link.download = filename;
+          link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 0);
+          showToast(`\u5DF2\u4E0B\u8F7D ${filename}`);
         });
         preview.addEventListener("click", (event) => {
           const row = event.target.closest("[data-source-line]");
@@ -3484,6 +3783,7 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       title: "\u9884\u89C8\u6B4C\u5355\u7F16\u6392",
       html: `
       <div class="ncm-sort-script-preview">
+        ${getCommandManualHtml()}
         <div class="ncm-sort-intro">
           <p>${escapeHtml(playlistName)}</p>
           ${warning}
@@ -3503,7 +3803,10 @@ MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDgtQn2JZ34ZC28NWYpAUd98iZ37BUrX/aKzmFbt7cl
       confirmButtonText: "\u786E\u8BA4\u5199\u56DE",
       cancelButtonText: "\u8FD4\u56DE\u7F16\u8F91",
       focusConfirm: false,
-      customClass: externalChange ? dangerSwalClasses : swalClasses
+      customClass: externalChange ? dangerSwalClasses : swalClasses,
+      didOpen: () => {
+        bindCommandManual();
+      }
     });
   }
   function showRestoreOrderDialog(backup) {
@@ -4473,7 +4776,6 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u6392\u5E8F\u5
     const editorResult = await showPlaylistScriptDialog(initialScript, {
       playlistName: playlist.name,
       currentCount: currentIds.length,
-      currentScript: buildPlaylistScript(currentIds),
       currentItems: items,
       resolveScript,
       resolveCommand: resolveCommandWithCache,
@@ -4594,7 +4896,7 @@ ${backupSaved ? "\u53EF\u4ECE\u5DE5\u5177\u83DC\u5355\u6062\u590D\u5199\u56DE\u5
       title: "\u6B4C\u5355\u6392\u5E8F\u5DE5\u5177",
       html: `
       <div class="ncm-sort-menu">
-        <button id="playlist-script" class="ncm-sort-menu-button">\u6B4C\u5355\u7F16\u6392\u811A\u672C</button>
+        <button id="playlist-script" class="ncm-sort-menu-button">\u6B4C\u5355\u7F16\u8F91\u5668</button>
         <button id="sort-by-title" class="ncm-sort-menu-button">\u6309\u6807\u9898\u6392\u5E8F</button>
         <button id="sort-by-date" class="ncm-sort-menu-button">\u6309\u53D1\u884C\u65E5\u671F\u6392\u5E8F</button>
         <button id="sort-by-artist" class="ncm-sort-menu-button">\u6309\u6B4C\u624B\u6392\u5E8F</button>

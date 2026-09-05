@@ -148,7 +148,6 @@ globalThis.openPlaylistScriptDialog = () => {
   const dialogPromise = showPlaylistScriptDialog(initialScript, {
     playlistName: '浏览器回归测试歌单',
     currentCount: 5,
-    currentScript: initialScript,
     currentItems: getSongItems(['1', '2', '3', '4', '5']),
     resolveScript: commands => resolvePlaylistCommands(commands, { fetchAlbum }),
     resolveCommand,
